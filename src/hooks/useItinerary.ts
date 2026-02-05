@@ -7,12 +7,14 @@ interface ItineraryState {
   currentItineraryId: string | null;
   loading: boolean;
   initialized: boolean;
+  userCount: number | null;
 
   // Computed
   currentItinerary: () => Itinerary | null;
 
   // Actions
   initialize: (userId: string) => Promise<void>;
+  checkUserLimit: () => Promise<{ allowed: boolean; currentCount: number }>;
   createItinerary: (title: string, startDate: string, endDate: string, location: string) => Promise<void>;
   selectItinerary: (id: string) => void;
   deleteItinerary: (id: string) => Promise<void>;
@@ -35,10 +37,33 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
   currentItineraryId: null,
   loading: false,
   initialized: false,
+  userCount: null,
 
   currentItinerary: () => {
     const state = get();
     return state.itineraries.find((it) => it.id === state.currentItineraryId) || null;
+  },
+
+  checkUserLimit: async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_user_count');
+
+      if (error) {
+        console.error('Error checking user limit:', error);
+        return { allowed: true, currentCount: 0 }; // Fail open
+      }
+
+      const currentCount = data || 0;
+      set({ userCount: currentCount });
+
+      return {
+        allowed: currentCount < 100,
+        currentCount,
+      };
+    } catch (error) {
+      console.error('Error checking user limit:', error);
+      return { allowed: true, currentCount: 0 }; // Fail open
+    }
   },
 
   initialize: async (userId: string) => {
@@ -125,6 +150,11 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
 
     if (error) {
       console.error('Error creating itinerary:', error);
+      // Check for user limit error from database trigger
+      if (error.message && error.message.includes('USER_LIMIT_REACHED:')) {
+        const message = error.message.split('USER_LIMIT_REACHED:')[1] || 'User limit reached';
+        throw new Error('USER_LIMIT_REACHED:' + message);
+      }
       throw error;
     }
 
