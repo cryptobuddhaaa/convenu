@@ -49,7 +49,7 @@ BEGIN
 
     -- If at or over limit, reject the insert
     IF user_count >= 100 THEN
-      RAISE EXCEPTION 'USER_LIMIT_REACHED:The app has reached its maximum capacity of 100 users. We are currently in beta and not accepting new users at this time. Please check back later!';
+      RAISE EXCEPTION 'USER_LIMIT_REACHED:⚠️ The app has reached its maximum capacity of 100 users. We are currently in beta and not accepting new users at this time. Please send a DM to X account @_cryptobuddha to get on the waiting list for access.';
     END IF;
   END IF;
 
