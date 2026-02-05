@@ -6,13 +6,16 @@ import type { Contact } from '../models/types';
 
 interface ContactsListProps {
   itineraryId?: string; // If provided, filter contacts by itinerary
+  contacts?: Contact[]; // If provided, use these contacts instead of fetching from hook
 }
 
-export default function ContactsList({ itineraryId }: ContactsListProps) {
+export default function ContactsList({ itineraryId, contacts: providedContacts }: ContactsListProps) {
   const { contacts, getContactsByItinerary, deleteContact } = useContacts();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
 
-  const displayContacts = itineraryId
+  const displayContacts = providedContacts
+    ? providedContacts
+    : itineraryId
     ? getContactsByItinerary(itineraryId)
     : contacts;
 
