@@ -77,8 +77,6 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
   },
 
   createItinerary: async (title, startDate, endDate, location) => {
-    const now = new Date().toISOString();
-
     // Generate days between start and end date
     const days: ItineraryDay[] = [];
     const start = new Date(startDate);
