@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useItinerary } from '../hooks/useItinerary';
 import EventForm from './EventForm';
-import type { Itinerary, ItineraryDay } from '../models/types';
+import EditEventDialog from './EditEventDialog';
+import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
 
 interface ItineraryTimelineProps {
   sharedItinerary?: Itinerary;
@@ -12,6 +13,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
   const { currentItinerary, deleteEvent, clearItinerary } = useItinerary();
   const [selectedDay, setSelectedDay] = useState<ItineraryDay | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
 
   const itinerary = sharedItinerary || currentItinerary();
   if (!itinerary) return null;
@@ -144,19 +146,32 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                       )}
                     </div>
                     {!readOnly && (
-                      <button
-                        onClick={() => {
-                          if (confirm('Delete this event?')) {
-                            deleteEvent(event.id);
-                          }
-                        }}
-                        className="ml-4 text-red-600 hover:text-red-800 p-2"
-                        title="Delete event"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => {
+                            setEditingEvent({ event, dayDate: day.date });
+                          }}
+                          className="text-blue-600 hover:text-blue-800 p-2"
+                          title="Edit event"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Delete this event?')) {
+                              deleteEvent(event.id);
+                            }
+                          }}
+                          className="text-red-600 hover:text-red-800 p-2"
+                          title="Delete event"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -173,6 +188,14 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
             setShowEventForm(false);
             setSelectedDay(null);
           }}
+        />
+      )}
+
+      {editingEvent && (
+        <EditEventDialog
+          event={editingEvent.event}
+          dayDate={editingEvent.dayDate}
+          onClose={() => setEditingEvent(null)}
         />
       )}
     </div>
