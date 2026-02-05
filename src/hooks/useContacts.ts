@@ -26,6 +26,7 @@ interface ContactsState {
   }) => Promise<void>;
   updateContact: (contactId: string, updates: Partial<Contact>) => Promise<void>;
   deleteContact: (contactId: string) => Promise<void>;
+  deleteContactsByEvent: (eventId: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -203,6 +204,27 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       }));
     } catch (error) {
       console.error('Error deleting contact:', error);
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  deleteContactsByEvent: async (eventId: string) => {
+    set({ loading: true });
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('event_id', eventId);
+
+      if (error) throw error;
+
+      set((state) => ({
+        contacts: state.contacts.filter((c) => c.eventId !== eventId),
+      }));
+    } catch (error) {
+      console.error('Error deleting contacts by event:', error);
       throw error;
     } finally {
       set({ loading: false });

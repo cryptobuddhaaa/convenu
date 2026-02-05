@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useItinerary } from '../hooks/useItinerary';
+import { useContacts } from '../hooks/useContacts';
 import EventForm from './EventForm';
 import EditEventDialog from './EditEventDialog';
 import ContactForm from './ContactForm';
@@ -13,6 +14,7 @@ interface ItineraryTimelineProps {
 
 export default function ItineraryTimeline({ sharedItinerary, readOnly = false }: ItineraryTimelineProps = {}) {
   const { currentItinerary, deleteEvent, clearItinerary } = useItinerary();
+  const { getContactsByEvent, deleteContactsByEvent } = useContacts();
   const [selectedDay, setSelectedDay] = useState<ItineraryDay | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
@@ -38,6 +40,30 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
       minute: '2-digit',
       hour12: true
     });
+  };
+
+  const handleDeleteEvent = async (event: ItineraryEvent) => {
+    const eventContacts = getContactsByEvent(event.id);
+    const contactCount = eventContacts.length;
+
+    let confirmMessage = 'Delete this event?';
+    if (contactCount > 0) {
+      confirmMessage = `Delete this event?\n\n⚠️ Warning: This event has ${contactCount} contact${contactCount > 1 ? 's' : ''} associated with it. ${contactCount > 1 ? 'They' : 'This contact'} will also be deleted.`;
+    }
+
+    if (confirm(confirmMessage)) {
+      try {
+        // Delete associated contacts first
+        if (contactCount > 0) {
+          await deleteContactsByEvent(event.id);
+        }
+        // Then delete the event
+        await deleteEvent(event.id);
+      } catch (error) {
+        console.error('Error deleting event and contacts:', error);
+        alert('Failed to delete event. Please try again.');
+      }
+    }
   };
 
   return (
@@ -173,11 +199,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                           </svg>
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm('Delete this event?')) {
-                              deleteEvent(event.id);
-                            }
-                          }}
+                          onClick={() => handleDeleteEvent(event)}
                           className="text-red-600 hover:text-red-800 p-2"
                           title="Delete event"
                         >
