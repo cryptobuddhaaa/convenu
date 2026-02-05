@@ -1,9 +1,10 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
+import { supabase } from '../lib/supabase';
 import type { Itinerary } from '../models/types';
 
 export const shareService = {
   /**
-   * Compress itinerary to URL-safe string
+   * Compress itinerary to URL-safe string (legacy method for backwards compatibility)
    */
   compressItinerary(itinerary: Itinerary): string {
     const json = JSON.stringify(itinerary);
@@ -11,7 +12,7 @@ export const shareService = {
   },
 
   /**
-   * Decompress URL-safe string to itinerary
+   * Decompress URL-safe string to itinerary (legacy method for backwards compatibility)
    */
   decompressItinerary(compressed: string): Itinerary | null {
     try {
@@ -25,25 +26,148 @@ export const shareService = {
   },
 
   /**
-   * Generate shareable URL with compressed itinerary
+   * Generate a short random share ID
    */
-  generateShareUrl(itinerary: Itinerary): string {
-    const compressed = this.compressItinerary(itinerary);
-    const baseUrl = window.location.origin + window.location.pathname;
-    // No need for encodeURIComponent since compressToEncodedURIComponent already handles it
-    return `${baseUrl}?data=${compressed}`;
+  generateShareId(): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  },
+
+  /**
+   * Generate shareable URL with database-backed short link
+   */
+  async generateShareUrl(itinerary: Itinerary): Promise<string> {
+    try {
+      // Check if a share link already exists for this itinerary
+      const { data: existing, error: fetchError } = await supabase
+        .from('shared_itineraries')
+        .select('id')
+        .eq('itinerary_id', itinerary.id)
+        .single();
+
+      let shareId: string;
+
+      if (existing && !fetchError) {
+        // Use existing share link
+        shareId = existing.id;
+      } else {
+        // Create new share link
+        shareId = this.generateShareId();
+
+        const { error: insertError } = await supabase
+          .from('shared_itineraries')
+          .insert({
+            id: shareId,
+            itinerary_id: itinerary.id,
+          });
+
+        if (insertError) {
+          console.error('Failed to create share link:', insertError);
+          // Fallback to legacy compressed URL method
+          const compressed = this.compressItinerary(itinerary);
+          const baseUrl = window.location.origin + window.location.pathname;
+          return `${baseUrl}?data=${compressed}`;
+        }
+      }
+
+      const baseUrl = window.location.origin + window.location.pathname;
+      return `${baseUrl}?share=${shareId}`;
+    } catch (error) {
+      console.error('Failed to generate share URL:', error);
+      // Fallback to legacy compressed URL method
+      const compressed = this.compressItinerary(itinerary);
+      const baseUrl = window.location.origin + window.location.pathname;
+      return `${baseUrl}?data=${compressed}`;
+    }
   },
 
   /**
    * Load itinerary from URL parameters
+   * Supports both new database-backed shares (?share=abc123) and legacy compressed URLs (?data=...)
    */
-  loadFromUrl(): Itinerary | null {
+  async loadFromUrl(): Promise<Itinerary | null> {
     const params = new URLSearchParams(window.location.search);
+
+    // Check for new share link format first
+    const shareId = params.get('share');
+    if (shareId) {
+      try {
+        // Fetch the shared itinerary from database
+        const { data: sharedLink, error: shareError } = await supabase
+          .from('shared_itineraries')
+          .select('itinerary_id')
+          .eq('id', shareId)
+          .single();
+
+        if (shareError || !sharedLink) {
+          console.error('Share link not found:', shareError);
+          return null;
+        }
+
+        // Fetch the actual itinerary with all its data
+        const { data: itineraryData, error: itineraryError } = await supabase
+          .from('itineraries')
+          .select(`
+            id,
+            title,
+            location,
+            start_date,
+            end_date,
+            data,
+            created_at,
+            updated_at,
+            users!inner(email, raw_user_meta_data)
+          `)
+          .eq('id', sharedLink.itinerary_id)
+          .single();
+
+        if (itineraryError || !itineraryData) {
+          console.error('Itinerary not found:', itineraryError);
+          return null;
+        }
+
+        // Increment view count
+        await supabase
+          .from('shared_itineraries')
+          .update({ view_count: supabase.rpc('increment', { row_id: shareId }) })
+          .eq('id', shareId);
+
+        // Extract user data (TypeScript doesn't know the structure)
+        const userData = itineraryData.users as any;
+        const userMetadata = userData?.raw_user_meta_data || {};
+        const userEmail = userData?.email;
+
+        // Transform database format to app format
+        const itinerary: Itinerary = {
+          id: itineraryData.id,
+          title: itineraryData.title,
+          location: itineraryData.location,
+          startDate: itineraryData.start_date,
+          endDate: itineraryData.end_date,
+          days: itineraryData.data.days || [],
+          transitSegments: itineraryData.data.transitSegments || [],
+          createdByName: userMetadata?.full_name || userEmail?.split('@')[0] || 'Unknown',
+          createdByEmail: userEmail,
+          createdAt: itineraryData.created_at,
+          updatedAt: itineraryData.updated_at,
+        };
+
+        return itinerary;
+      } catch (error) {
+        console.error('Failed to load shared itinerary:', error);
+        return null;
+      }
+    }
+
+    // Fall back to legacy compressed URL format
     const data = params.get('data');
     if (!data) return null;
 
     try {
-      // No need for decodeURIComponent since decompressFromEncodedURIComponent handles it
       return this.decompressItinerary(data);
     } catch (error) {
       console.error('Failed to load itinerary from URL:', error);

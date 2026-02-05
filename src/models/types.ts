@@ -66,6 +66,8 @@ export interface Itinerary {
     contactsLogged?: number;
     followUpCallsBooked?: number;
   };
+  createdByName?: string; // Name of the user who created this itinerary
+  createdByEmail?: string; // Email of the user who created this itinerary
   createdAt: string; // ISO8601 datetime
   updatedAt: string; // ISO8601 datetime
 }

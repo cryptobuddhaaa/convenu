@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { shareService } from '../services/shareService';
 import type { Itinerary } from '../models/types';
 
@@ -9,15 +9,27 @@ interface ShareDialogProps {
 
 export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
   const [copied, setCopied] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  let shareUrl = '';
-  let error = '';
-  try {
-    shareUrl = shareService.generateShareUrl(itinerary);
-  } catch (err) {
-    error = 'Failed to generate share URL. The itinerary might be too large.';
-    console.error('Share URL generation error:', err);
-  }
+  useEffect(() => {
+    const generateUrl = async () => {
+      try {
+        setLoading(true);
+        const url = await shareService.generateShareUrl(itinerary);
+        setShareUrl(url);
+        setError('');
+      } catch (err) {
+        setError('Failed to generate share URL. Please try again.');
+        console.error('Share URL generation error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    generateUrl();
+  }, [itinerary]);
 
   const handleCopy = async () => {
     const success = await shareService.copyToClipboard(shareUrl);
@@ -46,13 +58,20 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
         </div>
 
         <div className="space-y-4">
-          {error && (
+          {loading && (
+            <div className="flex items-center justify-center py-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="ml-3 text-gray-600">Generating share link...</p>
+            </div>
+          )}
+
+          {error && !loading && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4">
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
 
-          {!error && (
+          {!error && !loading && (
           <>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -87,15 +106,14 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
                 </button>
               </div>
               <p className="text-sm text-gray-500 mt-2">
-                Share this URL with anyone to let them view your itinerary. The itinerary is encoded in the URL itself - no server needed!
+                Share this short URL with anyone to let them view your itinerary. No account required to view!
               </p>
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-              <h4 className="text-sm font-medium text-blue-900 mb-1">How it works</h4>
+              <h4 className="text-sm font-medium text-blue-900 mb-1">✨ New: Short share links!</h4>
               <p className="text-sm text-blue-700">
-                Your itinerary is compressed and embedded in the URL. Anyone with the link can view it in their browser.
-                No account or server storage required!
+                Share links are now much shorter and easier to share. Your itinerary data is securely stored and anyone with the link can view it.
               </p>
             </div>
           </>

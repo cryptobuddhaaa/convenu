@@ -20,10 +20,13 @@ function App() {
 
   // Check for shared itinerary in URL on mount
   useEffect(() => {
-    const urlItinerary = shareService.loadFromUrl();
-    if (urlItinerary) {
-      setSharedItinerary(urlItinerary);
-    }
+    const loadSharedItinerary = async () => {
+      const urlItinerary = await shareService.loadFromUrl();
+      if (urlItinerary) {
+        setSharedItinerary(urlItinerary);
+      }
+    };
+    loadSharedItinerary();
   }, []);
 
   // Initialize itineraries when user logs in
@@ -38,10 +41,13 @@ function App() {
   // Load itinerary from URL if present
   useEffect(() => {
     if (user && initialized) {
-      const urlItinerary = shareService.loadFromUrl();
-      if (urlItinerary) {
-        loadItinerary(urlItinerary);
-      }
+      const loadUrlItinerary = async () => {
+        const urlItinerary = await shareService.loadFromUrl();
+        if (urlItinerary) {
+          loadItinerary(urlItinerary);
+        }
+      };
+      loadUrlItinerary();
     }
   }, [user, initialized, loadItinerary]);
 
@@ -75,6 +81,11 @@ function App() {
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">Shared Itinerary</h1>
                 <p className="text-sm text-gray-600 mt-1">{sharedItinerary.title}</p>
+                {sharedItinerary.createdByName && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Shared by {sharedItinerary.createdByName}
+                  </p>
+                )}
               </div>
               <a
                 href={window.location.origin + window.location.pathname}
@@ -89,7 +100,7 @@ function App() {
         <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-blue-900">
-              📌 You're viewing a shared itinerary. <a href={window.location.origin + window.location.pathname} className="underline font-medium">Sign in with Google</a> to create and save your own itineraries!
+              📌 You're viewing a shared itinerary{sharedItinerary.createdByName ? ` from ${sharedItinerary.createdByName}` : ''}. <a href={window.location.origin + window.location.pathname} className="underline font-medium">Sign in with Google</a> to create and save your own itineraries!
             </p>
           </div>
           <ItineraryTimeline sharedItinerary={sharedItinerary} readOnly={true} />
