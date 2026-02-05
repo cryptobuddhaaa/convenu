@@ -88,6 +88,12 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      // Check contact limit
+      const state = get();
+      if (state.contacts.length >= 100) {
+        throw new Error('LIMIT_REACHED:You have reached the maximum limit of 100 contacts. Please delete some contacts before adding new ones.');
+      }
+
       const { data, error } = await supabase
         .from('contacts')
         .insert({

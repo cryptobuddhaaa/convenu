@@ -74,7 +74,10 @@ export default function ContactForm({
         });
         setErrors(fieldErrors);
       } else if (error instanceof Error) {
-        setErrors({ form: error.message });
+        const message = error.message.startsWith('LIMIT_REACHED:')
+          ? error.message.replace('LIMIT_REACHED:', '')
+          : error.message;
+        setErrors({ form: message });
       }
     } finally {
       setIsSubmitting(false);
