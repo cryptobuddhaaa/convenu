@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useItinerary } from '../hooks/useItinerary';
 import EventForm from './EventForm';
 import EditEventDialog from './EditEventDialog';
+import ContactForm from './ContactForm';
+import ContactsList from './ContactsList';
 import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
 
 interface ItineraryTimelineProps {
@@ -14,6 +16,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
   const [selectedDay, setSelectedDay] = useState<ItineraryDay | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
+  const [addingContactFor, setAddingContactFor] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
 
   const itinerary = sharedItinerary || currentItinerary();
   if (!itinerary) return null;
@@ -149,6 +152,17 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                       <div className="flex gap-2 ml-4">
                         <button
                           onClick={() => {
+                            setAddingContactFor({ event, dayDate: day.date });
+                          }}
+                          className="text-green-600 hover:text-green-800 p-2"
+                          title="Add contact from this event"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => {
                             setEditingEvent({ event, dayDate: day.date });
                           }}
                           className="text-blue-600 hover:text-blue-800 p-2"
@@ -181,6 +195,18 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
         </div>
       ))}
 
+      {!readOnly && (
+        <div className="bg-white shadow rounded-lg p-6 mt-6">
+          <div className="mb-4">
+            <h3 className="text-xl font-semibold text-gray-900">Contacts from this Trip</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              People you've met at events in this itinerary
+            </p>
+          </div>
+          <ContactsList itineraryId={itinerary.id} />
+        </div>
+      )}
+
       {showEventForm && selectedDay && (
         <EventForm
           day={selectedDay}
@@ -196,6 +222,16 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
           event={editingEvent.event}
           dayDate={editingEvent.dayDate}
           onClose={() => setEditingEvent(null)}
+        />
+      )}
+
+      {addingContactFor && (
+        <ContactForm
+          itineraryId={itinerary.id}
+          eventId={addingContactFor.event.id}
+          eventTitle={addingContactFor.event.title}
+          dateMet={addingContactFor.dayDate}
+          onClose={() => setAddingContactFor(null)}
         />
       )}
     </div>

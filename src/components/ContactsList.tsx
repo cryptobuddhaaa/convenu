@@ -1,0 +1,160 @@
+import { useState } from 'react';
+import { useContacts } from '../hooks/useContacts';
+import EditContactDialog from './EditContactDialog';
+import type { Contact } from '../models/types';
+
+interface ContactsListProps {
+  itineraryId?: string; // If provided, filter contacts by itinerary
+}
+
+export default function ContactsList({ itineraryId }: ContactsListProps) {
+  const { contacts, getContactsByItinerary, deleteContact } = useContacts();
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+
+  const displayContacts = itineraryId
+    ? getContactsByItinerary(itineraryId)
+    : contacts;
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const handleDelete = async (contact: Contact) => {
+    if (confirm(`Delete contact for ${contact.firstName} ${contact.lastName}?`)) {
+      try {
+        await deleteContact(contact.id);
+      } catch (error) {
+        console.error('Error deleting contact:', error);
+        alert('Failed to delete contact. Please try again.');
+      }
+    }
+  };
+
+  if (displayContacts.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <svg
+          className="mx-auto h-12 w-12 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+          />
+        </svg>
+        <h3 className="mt-2 text-sm font-medium text-gray-900">No contacts yet</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Add contacts from events in your itinerary to keep track of people you meet.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {displayContacts.map((contact) => (
+          <div
+            key={contact.id}
+            className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+          >
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {contact.firstName} {contact.lastName}
+                </h3>
+                {contact.projectCompany && (
+                  <p className="text-sm text-gray-600 mt-1">{contact.projectCompany}</p>
+                )}
+              </div>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setEditingContact(contact)}
+                  className="text-blue-600 hover:text-blue-800 p-1"
+                  title="Edit contact"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => handleDelete(contact)}
+                  className="text-red-600 hover:text-red-800 p-1"
+                  title="Delete contact"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              {contact.telegramHandle && (
+                <div className="flex items-center text-gray-700">
+                  <svg className="w-4 h-4 mr-2 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z" />
+                  </svg>
+                  <a
+                    href={`https://t.me/${contact.telegramHandle.replace('@', '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline text-blue-600"
+                  >
+                    @{contact.telegramHandle.replace('@', '')}
+                  </a>
+                </div>
+              )}
+
+              {contact.email && (
+                <div className="flex items-center text-gray-700">
+                  <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <a href={`mailto:${contact.email}`} className="hover:underline text-blue-600">
+                    {contact.email}
+                  </a>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="text-xs text-gray-500">
+                <p className="font-medium text-gray-700">{contact.eventTitle}</p>
+                <p>{formatDate(contact.dateMet)}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {editingContact && (
+        <EditContactDialog contact={editingContact} onClose={() => setEditingContact(null)} />
+      )}
+    </div>
+  );
+}

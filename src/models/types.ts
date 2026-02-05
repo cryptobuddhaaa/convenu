@@ -71,3 +71,19 @@ export interface Itinerary {
   createdAt: string; // ISO8601 datetime
   updatedAt: string; // ISO8601 datetime
 }
+
+export interface Contact {
+  id: string;
+  itineraryId: string;
+  eventId: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  projectCompany?: string;
+  telegramHandle?: string;
+  email?: string;
+  eventTitle: string; // Denormalized from event for easier display
+  dateMet: string; // ISO8601 date
+  createdAt: string; // ISO8601 datetime
+  updatedAt: string; // ISO8601 datetime
+}

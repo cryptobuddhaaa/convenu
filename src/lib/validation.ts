@@ -141,3 +141,31 @@ export function isValidLumaUrl(url: string): boolean {
     return false;
   }
 }
+
+/**
+ * Validation schema for contact creation
+ */
+export const CreateContactSchema = z.object({
+  firstName: z.string()
+    .min(1, 'First name is required')
+    .max(100, 'First name must be less than 100 characters')
+    .transform(sanitizeText),
+  lastName: z.string()
+    .min(1, 'Last name is required')
+    .max(100, 'Last name must be less than 100 characters')
+    .transform(sanitizeText),
+  projectCompany: z.string()
+    .max(200, 'Project/Company must be less than 200 characters')
+    .optional()
+    .transform((val) => val ? sanitizeText(val) : undefined),
+  telegramHandle: z.string()
+    .max(100, 'Telegram handle must be less than 100 characters')
+    .optional()
+    .transform((val) => val ? sanitizeText(val) : undefined),
+  email: z.string()
+    .email('Invalid email address')
+    .max(200, 'Email must be less than 200 characters')
+    .optional()
+    .or(z.literal(''))
+    .transform((val) => val && val !== '' ? sanitizeText(val) : undefined),
+});

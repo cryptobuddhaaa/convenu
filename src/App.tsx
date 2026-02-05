@@ -1,18 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useItinerary } from './hooks/useItinerary';
+import { useContacts } from './hooks/useContacts';
 import { shareService } from './services/shareService';
 import Login from './components/Login';
 import ItineraryForm from './components/ItineraryForm';
 import ItineraryList from './components/ItineraryList';
 import ItineraryTimeline from './components/ItineraryTimeline';
 import ShareDialog from './components/ShareDialog';
+import ContactsPage from './components/ContactsPage';
+
+type ActiveTab = 'itinerary' | 'contacts';
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { currentItinerary, itineraries, initialize, initialized, reset, loadItinerary } = useItinerary();
+  const { initialize: initializeContacts, initialized: contactsInitialized, reset: resetContacts } = useContacts();
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('itinerary');
   const [prevItineraryCount, setPrevItineraryCount] = useState(itineraries.length);
   const [sharedItinerary, setSharedItinerary] = useState<any>(null);
 
@@ -29,14 +35,20 @@ function App() {
     loadSharedItinerary();
   }, []);
 
-  // Initialize itineraries when user logs in
+  // Initialize itineraries and contacts when user logs in
   useEffect(() => {
     if (user && !initialized) {
       initialize(user.id);
     } else if (!user && initialized) {
       reset();
     }
-  }, [user, initialized, initialize, reset]);
+
+    if (user && !contactsInitialized) {
+      initializeContacts(user.id);
+    } else if (!user && contactsInitialized) {
+      resetContacts();
+    }
+  }, [user, initialized, initialize, reset, contactsInitialized, initializeContacts, resetContacts]);
 
   // Load itinerary from URL if present
   useEffect(() => {
@@ -173,9 +185,36 @@ function App() {
           </div>
         ) : (
           <div>
-            <ItineraryList />
+            <div className="mb-6">
+              <nav className="flex space-x-4 border-b border-gray-200">
+                <button
+                  onClick={() => setActiveTab('itinerary')}
+                  className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === 'itinerary'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Itinerary
+                </button>
+                <button
+                  onClick={() => setActiveTab('contacts')}
+                  className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === 'contacts'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Contacts
+                </button>
+              </nav>
+            </div>
 
-            {showCreateForm && (
+            {activeTab === 'itinerary' && (
+              <>
+                <ItineraryList />
+
+                {showCreateForm && (
               <div className="bg-white shadow rounded-lg p-6 mb-6">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-semibold text-gray-900">Create New Itinerary</h2>
@@ -192,19 +231,23 @@ function App() {
               </div>
             )}
 
-            {!showCreateForm && (
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="w-full mb-6 inline-flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Create New Itinerary
-              </button>
+                {!showCreateForm && (
+                  <button
+                    onClick={() => setShowCreateForm(true)}
+                    className="w-full mb-6 inline-flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create New Itinerary
+                  </button>
+                )}
+
+                {itinerary && <ItineraryTimeline />}
+              </>
             )}
 
-            {itinerary && <ItineraryTimeline />}
+            {activeTab === 'contacts' && <ContactsPage />}
           </div>
         )}
       </main>
