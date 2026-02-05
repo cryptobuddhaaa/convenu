@@ -143,6 +143,31 @@ export function isValidLumaUrl(url: string): boolean {
 }
 
 /**
+ * Extract LinkedIn handle from either handle or full URL
+ * Accepts: "hsuchuanli" or "https://linkedin.com/in/hsuchuanli/"
+ * Returns: "hsuchuanli"
+ */
+export function extractLinkedInHandle(input: string): string {
+  if (!input) return '';
+
+  // If it's a URL, extract the handle
+  try {
+    const url = new URL(input);
+    const pathname = url.pathname;
+    // Match patterns like /in/handle/ or /in/handle
+    const match = pathname.match(/\/in\/([^/]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+  } catch {
+    // Not a valid URL, treat as handle
+  }
+
+  // Clean up any leading/trailing slashes or whitespace
+  return input.replace(/^\/+|\/+$/g, '').trim();
+}
+
+/**
  * Validation schema for contact creation
  */
 export const CreateContactSchema = z.object({
@@ -172,6 +197,10 @@ export const CreateContactSchema = z.object({
     .optional()
     .or(z.literal(''))
     .transform((val) => val && val !== '' ? sanitizeText(val) : undefined),
+  linkedin: z.string()
+    .max(200, 'LinkedIn must be less than 200 characters')
+    .optional()
+    .transform((val) => val ? sanitizeText(val) : undefined),
   notes: z.string()
     .max(100, 'Notes must be less than 100 characters')
     .optional()

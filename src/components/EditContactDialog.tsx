@@ -17,6 +17,7 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
   const [position, setPosition] = useState(contact.position || '');
   const [telegramHandle, setTelegramHandle] = useState(contact.telegramHandle || '');
   const [email, setEmail] = useState(contact.email || '');
+  const [linkedin, setLinkedin] = useState(contact.linkedin || '');
   const [notes, setNotes] = useState(contact.notes || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,6 +45,7 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
         position: position || undefined,
         telegramHandle: telegramHandle || undefined,
         email: email || undefined,
+        linkedin: linkedin || undefined,
         notes: notes || undefined,
       });
 
@@ -54,6 +56,7 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
         position: validated.position,
         telegramHandle: validated.telegramHandle,
         email: validated.email,
+        linkedin: validated.linkedin,
         notes: validated.notes,
       });
 
@@ -213,6 +216,24 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
                 disabled={isSubmitting}
               />
               {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="linkedin" className="block text-sm font-medium text-gray-700 mb-1">
+                LinkedIn
+              </label>
+              <input
+                type="text"
+                id="linkedin"
+                value={linkedin}
+                onChange={(e) => setLinkedin(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.linkedin ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="hsuchuanli or https://linkedin.com/in/hsuchuanli/"
+                disabled={isSubmitting}
+              />
+              {errors.linkedin && <p className="mt-1 text-sm text-red-600">{errors.linkedin}</p>}
             </div>
 
             <div>

@@ -83,8 +83,10 @@ export interface Contact {
   position?: string;
   telegramHandle?: string;
   email?: string;
+  linkedin?: string;
   notes?: string;
   eventTitle: string; // Denormalized from event for easier display
+  lumaEventUrl?: string; // Luma URL from the event (denormalized)
   dateMet: string; // ISO8601 date
   createdAt: string; // ISO8601 datetime
   updatedAt: string; // ISO8601 datetime

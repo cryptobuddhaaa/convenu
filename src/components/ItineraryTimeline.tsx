@@ -290,6 +290,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
           itineraryId={itinerary.id}
           eventId={addingContactFor.event.id}
           eventTitle={addingContactFor.event.title}
+          lumaEventUrl={addingContactFor.event.lumaEventUrl}
           dateMet={addingContactFor.dayDate}
           onClose={() => setAddingContactFor(null)}
         />

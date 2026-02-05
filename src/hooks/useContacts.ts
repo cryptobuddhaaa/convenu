@@ -17,6 +17,7 @@ interface ContactsState {
     itineraryId: string;
     eventId: string;
     eventTitle: string;
+    lumaEventUrl?: string;
     dateMet: string;
     firstName: string;
     lastName: string;
@@ -24,6 +25,7 @@ interface ContactsState {
     position?: string;
     telegramHandle?: string;
     email?: string;
+    linkedin?: string;
     notes?: string;
   }) => Promise<void>;
   updateContact: (contactId: string, updates: Partial<Contact>) => Promise<void>;
@@ -69,8 +71,10 @@ export const useContacts = create<ContactsState>()((set, get) => ({
         position: row.position,
         telegramHandle: row.telegram_handle,
         email: row.email,
+        linkedin: row.linkedin,
         notes: row.notes,
         eventTitle: row.event_title,
+        lumaEventUrl: row.luma_event_url,
         dateMet: row.date_met,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -111,8 +115,10 @@ export const useContacts = create<ContactsState>()((set, get) => ({
           position: contactData.position,
           telegram_handle: contactData.telegramHandle,
           email: contactData.email,
+          linkedin: contactData.linkedin,
           notes: contactData.notes,
           event_title: contactData.eventTitle,
+          luma_event_url: contactData.lumaEventUrl,
           date_met: contactData.dateMet,
         })
         .select()
@@ -131,8 +137,10 @@ export const useContacts = create<ContactsState>()((set, get) => ({
         position: data.position,
         telegramHandle: data.telegram_handle,
         email: data.email,
+        linkedin: data.linkedin,
         notes: data.notes,
         eventTitle: data.event_title,
+        lumaEventUrl: data.luma_event_url,
         dateMet: data.date_met,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
@@ -159,6 +167,7 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       if (updates.position !== undefined) updateData.position = updates.position;
       if (updates.telegramHandle !== undefined) updateData.telegram_handle = updates.telegramHandle;
       if (updates.email !== undefined) updateData.email = updates.email;
+      if (updates.linkedin !== undefined) updateData.linkedin = updates.linkedin;
       if (updates.notes !== undefined) updateData.notes = updates.notes;
 
       const { data, error } = await supabase
@@ -181,8 +190,10 @@ export const useContacts = create<ContactsState>()((set, get) => ({
         position: data.position,
         telegramHandle: data.telegram_handle,
         email: data.email,
+        linkedin: data.linkedin,
         notes: data.notes,
         eventTitle: data.event_title,
+        lumaEventUrl: data.luma_event_url,
         dateMet: data.date_met,
         createdAt: data.created_at,
         updatedAt: data.updated_at,

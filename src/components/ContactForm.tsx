@@ -7,6 +7,7 @@ interface ContactFormProps {
   itineraryId: string;
   eventId: string;
   eventTitle: string;
+  lumaEventUrl?: string;
   dateMet: string;
   onClose: () => void;
 }
@@ -15,6 +16,7 @@ export default function ContactForm({
   itineraryId,
   eventId,
   eventTitle,
+  lumaEventUrl,
   dateMet,
   onClose,
 }: ContactFormProps) {
@@ -25,6 +27,7 @@ export default function ContactForm({
   const [position, setPosition] = useState('');
   const [telegramHandle, setTelegramHandle] = useState('');
   const [email, setEmail] = useState('');
+  const [linkedin, setLinkedin] = useState('');
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,6 +55,7 @@ export default function ContactForm({
         position: position || undefined,
         telegramHandle: telegramHandle || undefined,
         email: email || undefined,
+        linkedin: linkedin || undefined,
         notes: notes || undefined,
       });
 
@@ -59,6 +63,7 @@ export default function ContactForm({
         itineraryId,
         eventId,
         eventTitle,
+        lumaEventUrl,
         dateMet,
         firstName: validated.firstName,
         lastName: validated.lastName,
@@ -66,6 +71,7 @@ export default function ContactForm({
         position: validated.position,
         telegramHandle: validated.telegramHandle,
         email: validated.email,
+        linkedin: validated.linkedin,
         notes: validated.notes,
       });
 
@@ -228,6 +234,24 @@ export default function ContactForm({
                 disabled={isSubmitting}
               />
               {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="linkedin" className="block text-sm font-medium text-gray-700 mb-1">
+                LinkedIn
+              </label>
+              <input
+                type="text"
+                id="linkedin"
+                value={linkedin}
+                onChange={(e) => setLinkedin(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.linkedin ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="hsuchuanli or https://linkedin.com/in/hsuchuanli/"
+                disabled={isSubmitting}
+              />
+              {errors.linkedin && <p className="mt-1 text-sm text-red-600">{errors.linkedin}</p>}
             </div>
 
             <div>
