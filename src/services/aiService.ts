@@ -70,14 +70,16 @@ class AIService {
    */
   async parseEventInput(
     userMessage: string,
-    itineraryContext: any
+    itineraryContext: any,
+    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
   ): Promise<AIResponse> {
     try {
       const prompt = getEventCreationPrompt(userMessage, itineraryContext);
 
       const response = await this.callClaudeAPI(prompt, {
         temperature: 0.3, // Lower temperature for more consistent output
-        maxTokens: 1024
+        maxTokens: 1024,
+        conversationHistory // Pass conversation history for context
       });
 
       // Parse JSON response from Claude
@@ -163,9 +165,10 @@ class AIService {
     options: {
       temperature?: number;
       maxTokens?: number;
+      conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
     } = {}
   ): Promise<string> {
-    const { temperature = 0.3, maxTokens = 1024 } = options;
+    const { temperature = 0.3, maxTokens = 1024, conversationHistory = [] } = options;
 
     // For MVP, we'll call the API via proxy in dev, serverless in production
     // In dev mode, the Vite proxy adds the API key header
@@ -184,6 +187,24 @@ class AIService {
       headers['anthropic-version'] = '2023-06-01';
     }
 
+    // Build messages array
+    // If we have conversation history, use it and append the current message
+    // Otherwise, start a new conversation with the current prompt
+    const messages = conversationHistory.length > 0
+      ? [
+          ...conversationHistory,
+          {
+            role: 'user' as const,
+            content: prompt
+          }
+        ]
+      : [
+          {
+            role: 'user' as const,
+            content: prompt
+          }
+        ];
+
     const response = await fetch(this.apiEndpoint, {
       method: 'POST',
       headers,
@@ -191,12 +212,7 @@ class AIService {
         model: this.model,
         max_tokens: maxTokens,
         temperature,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
+        messages
       })
     });
 

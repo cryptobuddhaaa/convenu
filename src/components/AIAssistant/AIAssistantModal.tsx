@@ -144,8 +144,17 @@ export function AIAssistantModal({
         }))
       };
 
-      // Call AI service
-      const response = await aiService.parseEventInput(userMessage, context);
+      // Prepare conversation history (exclude system/welcome messages)
+      // Format: array of {role, content} for Claude API
+      const conversationHistory = messages
+        .filter((msg) => msg.role !== 'assistant' || !msg.content.includes('Hi! I\'m your AI assistant')) // Exclude welcome message
+        .map((msg) => ({
+          role: msg.role,
+          content: msg.content
+        }));
+
+      // Call AI service with conversation history
+      const response = await aiService.parseEventInput(userMessage, context, conversationHistory);
 
       // Add AI response
       const aiMsg: Message = {
