@@ -16,15 +16,21 @@ export default function EditEventDialog({ event, dayDate, onClose }: EditEventDi
   const { updateEvent } = useItinerary();
 
   // Extract time from ISO datetime
-  const startTime = event.startTime.split('T')[1]?.slice(0, 5) || '';
-  const endTime = event.endTime.split('T')[1]?.slice(0, 5) || '';
+  // Handle both camelCase (TypeScript) and snake_case (database) property names
+  const eventAny = event as any;
+  const startTimeStr = eventAny.start_time || event.startTime;
+  const endTimeStr = eventAny.end_time || event.endTime;
+  const eventTypeStr = eventAny.event_type || event.eventType;
+
+  const startTime = startTimeStr?.split('T')[1]?.slice(0, 5) || '';
+  const endTime = endTimeStr?.split('T')[1]?.slice(0, 5) || '';
 
   const [title, setTitle] = useState(event.title);
   const [startTimeInput, setStartTimeInput] = useState(startTime);
   const [endTimeInput, setEndTimeInput] = useState(endTime);
   const [locationName, setLocationName] = useState(event.location.name);
   const [locationAddress, setLocationAddress] = useState(event.location.address || '');
-  const [eventType, setEventType] = useState<EventType>(event.eventType);
+  const [eventType, setEventType] = useState<EventType>(eventTypeStr);
   const [lumaUrl, setLumaUrl] = useState(event.lumaEventUrl || '');
   const [goals, setGoals] = useState(event.goals?.join(', ') || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
