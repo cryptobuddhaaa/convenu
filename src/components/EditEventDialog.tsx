@@ -4,6 +4,7 @@ import { CreateEventSchema } from '../lib/validation';
 import { z } from 'zod';
 import { lumaService } from '../services/lumaService';
 import { mapsService } from '../services/mapsService';
+import { normalizeEvent } from '../utils/eventNormalizer';
 import type { ItineraryEvent, EventType } from '../models/types';
 
 interface EditEventDialogProps {
@@ -12,25 +13,22 @@ interface EditEventDialogProps {
   onClose: () => void;
 }
 
-export default function EditEventDialog({ event, dayDate, onClose }: EditEventDialogProps) {
+export default function EditEventDialog({ event: rawEvent, dayDate, onClose }: EditEventDialogProps) {
   const { updateEvent } = useItinerary();
 
-  // Extract time from ISO datetime
-  // Handle both camelCase (TypeScript) and snake_case (database) property names
-  const eventAny = event as any;
-  const startTimeStr = eventAny.start_time || event.startTime;
-  const endTimeStr = eventAny.end_time || event.endTime;
-  const eventTypeStr = eventAny.event_type || event.eventType;
+  // Normalize event to ensure consistent camelCase properties
+  const event = normalizeEvent(rawEvent);
 
-  const startTime = startTimeStr?.split('T')[1]?.slice(0, 5) || '';
-  const endTime = endTimeStr?.split('T')[1]?.slice(0, 5) || '';
+  // Extract time from ISO datetime
+  const startTime = event.startTime?.split('T')[1]?.slice(0, 5) || '';
+  const endTime = event.endTime?.split('T')[1]?.slice(0, 5) || '';
 
   const [title, setTitle] = useState(event.title);
   const [startTimeInput, setStartTimeInput] = useState(startTime);
   const [endTimeInput, setEndTimeInput] = useState(endTime);
   const [locationName, setLocationName] = useState(event.location.name);
   const [locationAddress, setLocationAddress] = useState(event.location.address || '');
-  const [eventType, setEventType] = useState<EventType>(eventTypeStr);
+  const [eventType, setEventType] = useState<EventType>(event.eventType);
   const [lumaUrl, setLumaUrl] = useState(event.lumaEventUrl || '');
   const [goals, setGoals] = useState(event.goals?.join(', ') || '');
   const [errors, setErrors] = useState<Record<string, string>>({});

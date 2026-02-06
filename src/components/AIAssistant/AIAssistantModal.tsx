@@ -9,6 +9,7 @@ import aiService from '../../services/aiService';
 import { subscriptionService } from '../../services/subscriptionService';
 import { PaywallModal } from '../Premium/PaywallModal';
 import { sanitizeText } from '../../lib/validation';
+import { normalizeEvents } from '../../utils/eventNormalizer';
 
 interface Message {
   id: string;
@@ -124,6 +125,9 @@ export function AIAssistantModal({
 
     try {
       // Prepare context
+      // Normalize all events to camelCase format
+      const normalizedEvents = normalizeEvents(existingEvents);
+
       const context = {
         title: itinerary.title,
         startDate: itinerary.start_date,
@@ -131,21 +135,13 @@ export function AIAssistantModal({
         location: itinerary.location,
         goals: itinerary.goals,
         currentDate,
-        existingEvents: existingEvents.map((e) => {
-          // Handle both camelCase and snake_case property names
-          const eventAny = e as any;
-          const startTime = eventAny.start_time || e.startTime;
-          const endTime = eventAny.end_time || e.endTime;
-          // Extract date from startTime
-          const date = startTime ? new Date(startTime).toISOString().split('T')[0] : '';
-          return {
-            title: e.title,
-            startTime,
-            endTime,
-            eventType: eventAny.event_type || e.eventType,
-            date // Include date so AI can filter
-          };
-        })
+        existingEvents: normalizedEvents.map((e) => ({
+          title: e.title,
+          startTime: e.startTime,
+          endTime: e.endTime,
+          eventType: e.eventType,
+          date: e.startTime ? new Date(e.startTime).toISOString().split('T')[0] : ''
+        }))
       };
 
       // Call AI service
