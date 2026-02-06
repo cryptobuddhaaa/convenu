@@ -131,12 +131,21 @@ export function AIAssistantModal({
         location: itinerary.location,
         goals: itinerary.goals,
         currentDate,
-        existingEvents: existingEvents.map((e) => ({
-          title: e.title,
-          startTime: e.start_time,
-          endTime: e.end_time,
-          eventType: e.event_type
-        }))
+        existingEvents: existingEvents.map((e) => {
+          // Handle both camelCase and snake_case property names
+          const eventAny = e as any;
+          const startTime = eventAny.start_time || e.startTime;
+          const endTime = eventAny.end_time || e.endTime;
+          // Extract date from startTime
+          const date = startTime ? new Date(startTime).toISOString().split('T')[0] : '';
+          return {
+            title: e.title,
+            startTime,
+            endTime,
+            eventType: eventAny.event_type || e.eventType,
+            date // Include date so AI can filter
+          };
+        })
       };
 
       // Call AI service

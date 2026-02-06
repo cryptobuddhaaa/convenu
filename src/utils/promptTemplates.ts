@@ -21,9 +21,14 @@ export function getEventCreationPrompt(
   userMessage: string,
   context: ItineraryContext
 ): string {
-  const eventsToday = context.existingEvents || [];
-  const eventsSummary = eventsToday.length > 0
-    ? eventsToday.map((e) => `- ${e.title} (${e.startTime} - ${e.endTime})`).join('\n')
+  const allEvents = context.existingEvents || [];
+  const eventsSummary = allEvents.length > 0
+    ? allEvents.map((e) => {
+        const startTime = e.startTime ? new Date(e.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : 'TBD';
+        const endTime = e.endTime ? new Date(e.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : 'TBD';
+        const date = e.date || (e.startTime ? new Date(e.startTime).toISOString().split('T')[0] : 'TBD');
+        return `- ${date}: ${e.title} (${startTime} - ${endTime})`;
+      }).join('\n')
     : 'No events scheduled yet';
 
   return `You are an AI assistant helping users create calendar events for their itinerary.
@@ -85,17 +90,19 @@ STEP 4: Infer missing information (only if date is valid)
 STEP 5: Return structured JSON
 
 FOR VIEWING SCHEDULE (when user asks to see their schedule):
-1. Parse which date they're asking about (e.g., "Feb 9", "tomorrow", "the 10th")
-2. Filter events to ONLY that specific date
-3. Return this format:
+1. Parse which date they're asking about (e.g., "Feb 9" = "2026-02-09", "tomorrow", "the 10th")
+2. Look at the events list above - each event shows its date (e.g., "2026-02-09: Flight Arrival")
+3. Filter to ONLY events matching that date (ignore events with different dates)
+4. Return this format:
 {
   "action": "clarify",
   "message": "Here's your schedule for [date]:\n\n[List only events for that date with times]",
   "needsClarification": false
 }
-4. DO NOT return all events - only events for the requested date
+5. CRITICAL: DO NOT return all events - ONLY events matching the requested date
 
 Example for "what's on my schedule for Feb 9":
+Look for events with date "2026-02-09", then return:
 {
   "action": "clarify",
   "message": "Here's your schedule for February 9, 2026:\n\n• 8:00 AM - 10:00 AM: Flight Arrival\n• 12:00 PM - 1:00 PM: Lunch Meeting\n\nYou have 2 events scheduled.",
