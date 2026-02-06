@@ -84,8 +84,23 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
     }
   };
 
-  const handleAIEventCreate = async (event: any) => {
+  const handleAIEventCreate = async (aiEvent: any) => {
     try {
+      // Map AI event format (camelCase) to app event format (snake_case)
+      const event = {
+        title: aiEvent.title,
+        start_time: aiEvent.startTime, // AI uses startTime, app uses start_time
+        end_time: aiEvent.endTime,     // AI uses endTime, app uses end_time
+        event_type: aiEvent.eventType, // AI uses eventType, app uses event_type
+        location: {
+          name: aiEvent.location?.name || itinerary.location,
+          address: aiEvent.location?.address || ''
+        },
+        description: aiEvent.description || '',
+        goals: [], // Optional: parse from description if needed
+        luma_event_url: '' // Not provided by AI
+      };
+
       // Find the day this event belongs to
       const eventDate = new Date(event.start_time).toISOString().split('T')[0];
       const day = itinerary.days.find((d) => d.date === eventDate);
