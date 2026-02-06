@@ -379,6 +379,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
           isOpen={showAIAssistant}
           onClose={() => setShowAIAssistant(false)}
           itinerary={itinerary}
+          currentDate={new Date().toISOString().split('T')[0]} // Pass today's date
           existingEvents={itinerary.days.flatMap((day) => day.events)}
           onEventCreate={handleAIEventCreate}
           user={user}

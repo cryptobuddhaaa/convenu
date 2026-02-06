@@ -28,12 +28,14 @@ export function getEventCreationPrompt(
 
   return `You are an AI assistant helping users create calendar events for their itinerary.
 
+IMPORTANT - TODAY'S DATE: ${context.currentDate || new Date().toISOString().split('T')[0]}
+Use this date to calculate relative dates like "tomorrow", "next Tuesday", etc.
+
 Current Context:
 - Itinerary: "${context.title}"
 - Trip dates: ${context.startDate} to ${context.endDate}
 - Primary location: ${context.location}
 ${context.goals ? `- Trip goals: ${context.goals}` : ''}
-${context.currentDate ? `- Current date being edited: ${context.currentDate}` : ''}
 
 Existing events:
 ${eventsSummary}
@@ -50,10 +52,11 @@ Your task:
      * Travel: 2 hours default for flights, 30 minutes for local transport
      * Activities: 2 hours default
    - Location (if not specified, use primary location: ${context.location})
-3. Handle relative dates:
-   - "tomorrow" = day after current date
-   - "next Monday" = calculate from current date
-   - "on the 9th" = use month from trip dates
+3. Handle relative dates (CRITICAL - use TODAY'S DATE provided above):
+   - "tomorrow" = today's date + 1 day
+   - "next Tuesday" = find next Tuesday from today
+   - "on the 15th" = use current month if within trip dates, otherwise ask
+   - ALWAYS calculate from the TODAY'S DATE provided above, not trip start date
 4. Return a structured JSON response
 
 Event Type Guidelines:
