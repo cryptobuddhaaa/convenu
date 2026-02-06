@@ -221,18 +221,32 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                 <p className="text-gray-500 text-center py-8">No events scheduled for this day</p>
               ) : (
                 <div className="space-y-4">
-              {day.events.map((event) => (
+              {day.events
+                .sort((a, b) => {
+                  // Sort events by start time (handle both camelCase and snake_case)
+                  const aTime = (a as any).start_time || a.startTime;
+                  const bTime = (b as any).start_time || b.startTime;
+                  return new Date(aTime).getTime() - new Date(bTime).getTime();
+                })
+                .map((event) => {
+                  // Handle both camelCase and snake_case property names
+                  const eventAny = event as any;
+                  const startTime = eventAny.start_time || event.startTime;
+                  const endTime = eventAny.end_time || event.endTime;
+                  const eventType = eventAny.event_type || event.eventType;
+
+                  return (
                 <div key={event.id} className="border-l-4 border-blue-500 pl-4 py-2">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-gray-900">{event.title}</span>
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                          {event.eventType}
+                          {eventType}
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 mt-1">
-                        {formatTime(event.startTime)} - {formatTime(event.endTime)}
+                        {formatTime(startTime)} - {formatTime(endTime)}
                       </p>
                       <div className="text-sm text-gray-700 mt-1">
                         {event.location.mapsUrl ? (
@@ -309,7 +323,8 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                     )}
                   </div>
                 </div>
-              ))}
+                  );
+                })}
                 </div>
               )}
             </>
