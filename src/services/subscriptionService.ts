@@ -77,7 +77,7 @@ class SubscriptionService {
 
       // Set limits based on tier
       const limits: Record<SubscriptionTier, number> = {
-        free: 3, // 3 AI events for free trial
+        free: 10, // 10 AI queries for testing (was 3)
         premium: 50, // 50 queries per month
         pro: -1 // Unlimited
       };
@@ -237,7 +237,7 @@ class SubscriptionService {
           'Up to 10 itineraries',
           'Up to 20 events per itinerary',
           'Up to 100 contacts',
-          '3 AI event creations (trial)',
+          '10 AI queries per month',
           'Basic features'
         ]
       },
