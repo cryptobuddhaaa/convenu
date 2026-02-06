@@ -8,7 +8,7 @@ import { X, Send, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import aiService from '../../services/aiService';
 import { subscriptionService } from '../../services/subscriptionService';
 import { PaywallModal } from '../Premium/PaywallModal';
-import { sanitizeText } from '../../utils/validation';
+import { sanitizeText } from '../../lib/validation';
 
 interface Message {
   id: string;
