@@ -28,12 +28,13 @@ export function getEventCreationPrompt(
 
   return `You are an AI assistant helping users create calendar events for their itinerary.
 
-IMPORTANT - TODAY'S DATE: ${context.currentDate || new Date().toISOString().split('T')[0]}
-Use this date to calculate relative dates like "tomorrow", "next Tuesday", etc.
+⚠️ CRITICAL RULES - READ FIRST:
+1. TODAY'S DATE: ${context.currentDate || new Date().toISOString().split('T')[0]}
+2. TRIP DATES: ${context.startDate} to ${context.endDate}
+3. ONLY create events within trip dates. If date is outside this range, ASK for clarification.
 
 Current Context:
 - Itinerary: "${context.title}"
-- Trip dates: ${context.startDate} to ${context.endDate}
 - Primary location: ${context.location}
 ${context.goals ? `- Trip goals: ${context.goals}` : ''}
 
@@ -42,27 +43,38 @@ ${eventsSummary}
 
 User Input: "${userMessage}"
 
-Your task:
-1. Parse the user's message and extract event details
-2. Calculate the date (CRITICAL - use TODAY'S DATE: ${context.currentDate || new Date().toISOString().split('T')[0]}):
-   - "tomorrow" = today + 1 day
-   - "next Tuesday" = find next Tuesday from today
-   - "on the 15th" = Feb 15 within trip range, otherwise ask
-3. VALIDATE THE DATE (CRITICAL):
-   - Trip dates: ${context.startDate} to ${context.endDate}
-   - If calculated date is BEFORE trip start or AFTER trip end:
-     * DO NOT create the event
-     * Explain the date falls outside the itinerary
-     * Ask if they meant a date within ${context.startDate} to ${context.endDate}
-4. Infer missing information intelligently:
-   - Event type (meeting, travel, meal, buffer, accommodation, activity, side-event, main-conference)
-   - Duration (if only start time given):
-     * Meetings: 1 hour default
-     * Meals: 30 minutes for breakfast, 1 hour for lunch/dinner
-     * Travel: 2 hours default for flights, 30 minutes for local transport
-     * Activities: 2 hours default
-   - Location (if not specified, use primary location: ${context.location})
-5. Return a structured JSON response
+STEP-BY-STEP PROCESS (follow in order):
+
+STEP 1: Calculate the actual date
+- If user says "tomorrow": Calculate ${context.currentDate} + 1 day
+- If user says "next Tuesday": Find next Tuesday from ${context.currentDate}
+- If user says "on the 15th": Use current month
+
+STEP 2: CHECK DATE VALIDITY (MANDATORY - DO NOT SKIP)
+- Is the calculated date >= ${context.startDate}? If NO → go to STEP 3
+- Is the calculated date <= ${context.endDate}? If NO → go to STEP 3
+- If BOTH are YES → continue to STEP 4
+
+STEP 3: DATE IS OUTSIDE TRIP - ASK FOR CLARIFICATION
+Return this format:
+{
+  "action": "clarify",
+  "message": "The date [calculated date] is [before/after] your trip (${context.startDate} to ${context.endDate}). Which day during your trip would you like this event?",
+  "needsClarification": true,
+  "clarificationQuestion": "Please specify a date between ${context.startDate} and ${context.endDate}"
+}
+STOP HERE - do not proceed to STEP 4
+
+STEP 4: Infer missing information (only if date is valid)
+- Event type: meeting, travel, meal, buffer, accommodation, activity, side-event, main-conference
+- Duration defaults:
+  * Meetings: 1 hour
+  * Meals: 30 min breakfast, 1 hour lunch/dinner
+  * Travel: 2 hours flights, 30 min local
+  * Activities: 2 hours
+- Location: Use ${context.location} if not specified
+
+STEP 5: Return structured JSON
 
 Event Type Guidelines:
 - "meeting" = business meetings, calls, appointments
