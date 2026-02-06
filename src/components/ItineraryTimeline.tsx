@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useItinerary } from '../hooks/useItinerary';
 import { useContacts } from '../hooks/useContacts';
+import { useAuth } from '../hooks/useAuth';
 import EventForm from './EventForm';
 import EditEventDialog from './EditEventDialog';
 import ContactForm from './ContactForm';
 import ContactsList from './ContactsList';
+import { AIAssistantModal } from './AIAssistant/AIAssistantModal';
 import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
 
 interface ItineraryTimelineProps {
@@ -13,14 +15,16 @@ interface ItineraryTimelineProps {
 }
 
 export default function ItineraryTimeline({ sharedItinerary, readOnly = false }: ItineraryTimelineProps = {}) {
-  const { currentItinerary, deleteEvent, clearItinerary } = useItinerary();
+  const { currentItinerary, deleteEvent, clearItinerary, addEvent } = useItinerary();
   const { getContactsByEvent, deleteContactsByEvent } = useContacts();
+  const { user } = useAuth();
   const [selectedDay, setSelectedDay] = useState<ItineraryDay | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
   const [addingContactFor, setAddingContactFor] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [contactsExpanded, setContactsExpanded] = useState(true);
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
 
   const itinerary = sharedItinerary || currentItinerary();
   if (!itinerary) return null;
@@ -80,6 +84,28 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
     }
   };
 
+  const handleAIEventCreate = async (event: any) => {
+    try {
+      // Find the day this event belongs to
+      const eventDate = new Date(event.start_time).toISOString().split('T')[0];
+      const day = itinerary.days.find((d) => d.date === eventDate);
+
+      if (!day) {
+        alert('Could not find the day for this event. Please try adding it manually.');
+        return;
+      }
+
+      // Add the event
+      await addEvent(day.date, event);
+
+      // Close the modal after successful creation
+      // (Modal will show confirmation message first)
+    } catch (error) {
+      console.error('Error creating AI event:', error);
+      alert('Failed to create event. Please try again.');
+    }
+  };
+
   return (
     <div>
       <div className="bg-white shadow rounded-lg p-6 mb-6">
@@ -90,18 +116,32 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
             <p className="text-sm text-gray-500 mt-1">
               {formatDate(itinerary.startDate)} - {formatDate(itinerary.endDate)}
             </p>
+            {itinerary.goals && (
+              <p className="text-sm text-gray-600 mt-2">🎯 {itinerary.goals}</p>
+            )}
           </div>
           {!readOnly && (
-            <button
-              onClick={() => {
-                if (confirm('Are you sure you want to start over?')) {
-                  clearItinerary();
-                }
-              }}
-              className="text-sm text-red-600 hover:text-red-800"
-            >
-              Clear Itinerary
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowAIAssistant(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                ✨ AI Assistant
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm('Are you sure you want to start over?')) {
+                    clearItinerary();
+                  }
+                }}
+                className="text-sm text-red-600 hover:text-red-800 px-4 py-2"
+              >
+                Clear Itinerary
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -309,6 +349,17 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
           lumaEventUrl={addingContactFor.event.lumaEventUrl}
           dateMet={addingContactFor.dayDate}
           onClose={() => setAddingContactFor(null)}
+        />
+      )}
+
+      {showAIAssistant && user && (
+        <AIAssistantModal
+          isOpen={showAIAssistant}
+          onClose={() => setShowAIAssistant(false)}
+          itinerary={itinerary}
+          existingEvents={itinerary.days.flatMap((day) => day.events)}
+          onEventCreate={handleAIEventCreate}
+          user={user}
         />
       )}
     </div>
