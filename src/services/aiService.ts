@@ -6,7 +6,7 @@
 import { getEventCreationPrompt, getAnalysisPrompt, getContactBriefingPrompt } from '../utils/promptTemplates';
 
 interface AIResponse {
-  action: 'create_event' | 'clarify' | 'error';
+  action: 'create_event' | 'delete_event' | 'clarify' | 'error';
   event?: {
     title: string;
     startTime: string;
@@ -18,6 +18,12 @@ interface AIResponse {
     };
     description?: string;
   };
+  // For delete_event action
+  eventTitle?: string;
+  eventDate?: string;
+  eventTime?: string;
+  hasContacts?: boolean;
+  contactCount?: number;
   message: string;
   needsClarification: boolean;
   clarificationQuestion?: string;

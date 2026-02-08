@@ -6,7 +6,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import aiService from '../../services/aiService';
-import { subscriptionService } from '../../services/subscriptionService';
 import { PaywallModal } from '../Premium/PaywallModal';
 import { sanitizeText } from '../../lib/validation';
 import { normalizeEvents } from '../../utils/eventNormalizer';
@@ -27,7 +26,7 @@ interface AIAssistantModalProps {
   existingEvents?: any[];
   contacts?: any[];
   onEventCreate: (event: any) => void;
-  onEventDelete: (eventId: string, eventTitle: string) => Promise<void>;
+  onEventDelete: (eventId: string) => Promise<void>;
   user: any;
 }
 

@@ -422,7 +422,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
           existingEvents={itinerary.days.flatMap((day) => day.events)}
           contacts={getContactsByItinerary(itinerary.id)}
           onEventCreate={handleAIEventCreate}
-          onEventDelete={async (eventId: string, eventTitle: string) => {
+          onEventDelete={async (eventId: string) => {
             const eventContacts = getContactsByEvent(eventId);
             // Delete associated contacts first
             if (eventContacts.length > 0) {
