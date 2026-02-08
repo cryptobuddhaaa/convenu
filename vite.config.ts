@@ -21,10 +21,6 @@ export default defineConfig(({ mode }) => {
             proxy.on('proxyReq', (proxyReq, _req, _res) => {
               console.log('Proxying request to Claude API...');
 
-              // Note: req.body is not available in Node's IncomingMessage
-              // Body handling is done by the proxy middleware itself
-            }
-
               // Add required headers for Claude API
               proxyReq.setHeader('x-api-key', env.CLAUDE_API_KEY || '');
               proxyReq.setHeader('anthropic-version', '2023-06-01');
