@@ -110,11 +110,24 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
         }
 
         // Check for duplicate events by matching title and start time
+        // Note: existingEvent uses camelCase (startTime), imported event uses snake_case (start_time)
+        const incomingStartTime = event.start_time || event.startTime;
         const isDuplicate = itinerary.days.some(day =>
-          day.events.some(existingEvent =>
-            existingEvent.title === event.title &&
-            existingEvent.startTime === event.start_time
-          )
+          day.events.some(existingEvent => {
+            const titleMatch = existingEvent.title.trim().toLowerCase() === event.title.trim().toLowerCase();
+            const timeMatch = existingEvent.startTime === incomingStartTime;
+
+            if (titleMatch && timeMatch) {
+              console.log('Duplicate detected:', {
+                existingTitle: existingEvent.title,
+                existingStartTime: existingEvent.startTime,
+                incomingTitle: event.title,
+                incomingStartTime: incomingStartTime
+              });
+            }
+
+            return titleMatch && timeMatch;
+          })
         );
 
         if (isDuplicate) {
