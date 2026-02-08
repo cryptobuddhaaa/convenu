@@ -61,15 +61,15 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       }
 
       // Fetch events within the itinerary date range
-      const timeMin = new Date(itinerary.start_date).toISOString();
-      const timeMax = new Date(itinerary.end_date);
+      const timeMin = new Date(itinerary.startDate).toISOString();
+      const timeMax = new Date(itinerary.endDate);
       timeMax.setHours(23, 59, 59, 999);
       const timeMaxISO = timeMax.toISOString();
 
       console.log('Fetching Luma events for date range:', {
         itinerary: itinerary.title,
-        startDate: itinerary.start_date,
-        endDate: itinerary.end_date,
+        startDate: itinerary.startDate,
+        endDate: itinerary.endDate,
         timeMin,
         timeMaxISO
       });
@@ -90,7 +90,7 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
         const allEventIds = new Set(events.map((e) => e.id));
         setSelectedEvents(allEventIds);
       } else {
-        setError(`No Luma events found in your calendar between ${new Date(itinerary.start_date).toLocaleDateString()} and ${new Date(itinerary.end_date).toLocaleDateString()}. Make sure you have Luma events (from lu.ma) in this date range.`);
+        setError(`No Luma events found in your calendar between ${new Date(itinerary.startDate).toLocaleDateString()} and ${new Date(itinerary.endDate).toLocaleDateString()}. Make sure you have Luma events (from lu.ma) in this date range.`);
       }
     } catch (err: any) {
       console.error('Error fetching Luma events:', err);
