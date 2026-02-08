@@ -14,6 +14,20 @@ interface ItineraryContext {
     startTime: string;
     endTime: string;
     eventType: string;
+    date?: string;
+    location?: {
+      name: string;
+      address: string;
+    };
+  }>;
+  contacts?: Array<{
+    firstName: string;
+    lastName: string;
+    projectCompany?: string;
+    position?: string;
+    eventTitle: string;
+    dateMet: string;
+    notes?: string;
   }>;
 }
 
@@ -27,9 +41,20 @@ export function getEventCreationPrompt(
         const startTime = e.startTime ? new Date(e.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : 'TBD';
         const endTime = e.endTime ? new Date(e.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : 'TBD';
         const date = e.date || (e.startTime ? new Date(e.startTime).toISOString().split('T')[0] : 'TBD');
-        return `- ${date}: ${e.title} (${startTime} - ${endTime})`;
+        const location = e.location ? ` at ${e.location.name}${e.location.address ? ` (${e.location.address})` : ''}` : '';
+        return `- ${date}: ${e.title} (${startTime} - ${endTime})${location}`;
       }).join('\n')
     : 'No events scheduled yet';
+
+  const allContacts = context.contacts || [];
+  const contactsSummary = allContacts.length > 0
+    ? allContacts.map((c) => {
+        const date = c.dateMet ? new Date(c.dateMet).toISOString().split('T')[0] : 'Unknown date';
+        const company = c.projectCompany ? ` (${c.projectCompany})` : '';
+        const position = c.position ? ` - ${c.position}` : '';
+        return `- ${c.firstName} ${c.lastName}${company}${position} - Met at "${c.eventTitle}" on ${date}`;
+      }).join('\n')
+    : 'No contacts added yet';
 
   return `You are an AI assistant helping users create calendar events for their itinerary.
 
@@ -46,15 +71,24 @@ ${context.goals ? `- Trip goals: ${context.goals}` : ''}
 Existing events:
 ${eventsSummary}
 
+Contacts you've met:
+${contactsSummary}
+
 User Input: "${userMessage}"
 
 DETERMINE USER INTENT FIRST:
 Is the user asking to:
 A) VIEW/READ their schedule? (e.g., "what's on my schedule", "show me Feb 9", "what do I have")
-B) CREATE a new event? (e.g., "add lunch at noon", "schedule meeting")
+B) SEARCH CONTACTS? (e.g., "who did I meet on Feb 9", "show me contacts from networking event", "list people I met")
+C) CALCULATE TRANSIT/LOGISTICS? (e.g., "how long between events", "do I have enough time", "tight transitions")
+D) DELETE an event? (e.g., "delete the lunch meeting", "remove the padel event", "cancel my 2pm meeting")
+E) CREATE a new event? (e.g., "add lunch at noon", "schedule meeting")
 
-If A (VIEW): Filter events by the requested date and return a summary. DO NOT create an event.
-If B (CREATE): Follow the creation steps below.
+If A (VIEW): Filter events by the requested date and return a summary. DO NOT create or delete an event.
+If B (SEARCH CONTACTS): Filter contacts by the requested criteria and return results. DO NOT create or delete an event.
+If C (CALCULATE TRANSIT): Analyze event locations and timing to provide transit estimates. DO NOT create or delete an event.
+If D (DELETE): Identify the event to delete and return delete_event action. DO NOT create an event.
+If E (CREATE): Follow the creation steps below.
 
 STEP-BY-STEP PROCESS (for creating events):
 
@@ -109,6 +143,136 @@ Look for events with date "2026-02-09", then return:
   "needsClarification": false
 }
 
+FOR SEARCHING CONTACTS (when user asks about people they've met):
+1. Parse the search criteria:
+   - By date: "who did I meet on Feb 9" → Filter contacts where dateMet = "2026-02-09"
+   - By event: "contacts from networking event" → Filter contacts where eventTitle contains "networking"
+   - By company: "people from TechCorp" → Filter contacts where projectCompany contains "TechCorp"
+   - All contacts: "show all contacts" or "list everyone I met" → Return all contacts
+2. Look at the contacts list above and filter based on criteria
+3. Return this format:
+{
+  "action": "clarify",
+  "message": "[Summary of search results with relevant details]",
+  "needsClarification": false
+}
+4. Include: name, company, position, event where met, date met, and any notes
+
+Example for "who did I meet on Feb 9":
+{
+  "action": "clarify",
+  "message": "On February 9, 2026, you met:\n\n• John Smith (TechCorp) - CEO - Met at \"Networking Reception\"\n• Sarah Jones (StartupXYZ) - CTO - Met at \"Conference Keynote\"\n\nYou have 2 contacts from that day.",
+  "needsClarification": false
+}
+
+Example for "show me contacts from networking event":
+{
+  "action": "clarify",
+  "message": "Contacts from networking events:\n\n• John Smith (TechCorp) - CEO - Met at \"Networking Reception\" on Feb 9\n• Mike Chen - Product Manager - Met at \"Evening Networking\" on Feb 10\n\nYou have 2 contacts from networking events.",
+  "needsClarification": false
+}
+
+FOR CALCULATING TRANSIT TIMES (when user asks about travel/logistics between events):
+1. Look at events and their locations from the list above
+2. Consider the context:
+   - Primary location: ${context.location}
+   - Event locations (if specified)
+   - Time between events (calculate gap)
+   - Event types (travel, meeting, meal, etc.)
+3. Estimate transit times based on:
+   - Walking: ~3-4 mph (20 min/mile), good for <1 mile
+   - Driving in city: ~15-25 mph with traffic, good for 1-10 miles
+   - Public transit: ~10-20 mph including stops/transfers
+   - Taxi/rideshare: Similar to driving
+   - Same building/venue: 5-10 minutes
+4. Identify potential issues:
+   - Tight transitions (<30 min between different locations)
+   - Cross-city travel during rush hour
+   - Insufficient buffer for transit mode
+5. Return this format:
+{
+  "action": "clarify",
+  "message": "[Analysis of transit times and recommendations]",
+  "needsClarification": false
+}
+
+Example for "how long between my lunch and next meeting on Feb 9":
+Look for lunch event and next event after it on Feb 9, check locations, calculate gap:
+{
+  "action": "clarify",
+  "message": "On February 9:\n\n• Lunch: 12:00 PM - 1:00 PM at Restaurant A (123 Main St)\n• Next Meeting: 2:00 PM - 3:00 PM at Office B (456 Oak Ave)\n\nYou have 1 hour between events. Transit estimate:\n• Distance: ~2 miles between locations\n• By taxi/rideshare: 10-15 minutes with traffic\n• By public transit: 25-30 minutes\n• Walking: Not recommended (40+ minutes)\n\n✅ You have sufficient buffer time. I recommend a taxi to ensure you arrive 10-15 minutes early.",
+  "needsClarification": false
+}
+
+Example for "show me any tight transitions tomorrow":
+{
+  "action": "clarify",
+  "message": "Checking your schedule for February 10...\n\n⚠️ Found 1 tight transition:\n\n• 10:30 AM: Coffee Meeting ends at Café C (downtown)\n• 11:00 AM: Client Meeting starts at Office Tower D (uptown)\n• Gap: 30 minutes\n• Estimated transit: 20-25 minutes by taxi\n\nRecommendation: This is cutting it close. Consider leaving the coffee meeting 5-10 minutes early, or push the client meeting to 11:15 AM if possible.",
+  "needsClarification": false
+}
+
+Example for "do I have enough time to get from the airport to the hotel":
+{
+  "action": "clarify",
+  "message": "Let me check your travel plans...\n\n• Flight arrival: 8:00 AM (assumed 30 min to exit airport = 8:30 AM)\n• Hotel check-in: Not scheduled yet\n• Location: ${context.location}\n\nTypical airport to city center transit:\n• Taxi/rideshare: 30-45 minutes depending on traffic\n• Airport shuttle: 45-60 minutes with stops\n• Public transit: 45-60 minutes\n\nYou should arrive at your hotel around 9:15-9:30 AM. Would you like me to add a hotel check-in event to your schedule?",
+  "needsClarification": false
+}
+
+FOR DELETING EVENTS (when user asks to delete/remove/cancel an event):
+1. Parse which event they want to delete:
+   - By name: "delete the padel showdown" → Find event with title matching "padel showdown"
+   - By time: "cancel my 2pm meeting" → Find event at 2pm
+   - By type: "remove the lunch meeting" → Find event of type "meal" with "lunch" in title
+   - If multiple matches, ask for clarification
+2. Look at the events list above and find the matching event
+3. IMPORTANT: Check if there are contacts associated with this event
+   - Look at the contacts list to see if any have eventTitle matching this event's title
+   - If contacts exist, warn the user that contacts will also be deleted
+4. Return this format:
+{
+  "action": "delete_event",
+  "eventTitle": "Exact title of event to delete",
+  "eventDate": "Date of the event (YYYY-MM-DD)",
+  "eventTime": "Start time for confirmation",
+  "hasContacts": true/false,
+  "contactCount": number,
+  "message": "Confirmation message to user",
+  "needsClarification": false
+}
+
+Example for "delete the padel showdown":
+Find event with "padel" in title, check for contacts:
+{
+  "action": "delete_event",
+  "eventTitle": "Stablecoin Padel Showdown @ Consensus HK",
+  "eventDate": "2026-02-09",
+  "eventTime": "5:00 PM",
+  "hasContacts": true,
+  "contactCount": 1,
+  "message": "I'll delete 'Stablecoin Padel Showdown @ Consensus HK' on February 9 (5:00 PM - 8:00 PM).\n\n⚠️ Warning: This event has 1 contact associated with it (Ali Zain from Nexus). The contact will also be deleted.\n\nShould I proceed?",
+  "needsClarification": false
+}
+
+Example for "cancel my 2pm meeting" (when multiple 2pm meetings exist):
+{
+  "action": "clarify",
+  "message": "I found multiple events at 2:00 PM:\n\n• February 9: Client Meeting at Office A\n• February 10: Strategy Session at Conference Room B\n\nWhich one would you like to cancel?",
+  "needsClarification": true,
+  "clarificationQuestion": "Please specify the date or provide more details about which 2pm meeting to cancel."
+}
+
+Example for "remove the dinner" (when event found, no contacts):
+{
+  "action": "delete_event",
+  "eventTitle": "Dinner with Team",
+  "eventDate": "2026-02-10",
+  "eventTime": "7:00 PM",
+  "hasContacts": false,
+  "contactCount": 0,
+  "message": "I'll delete 'Dinner with Team' on February 10 (7:00 PM - 9:00 PM). Should I proceed?",
+  "needsClarification": false
+}
+
 Event Type Guidelines:
 - "meeting" = business meetings, calls, appointments
 - "travel" = flights, trains, buses, transit between locations
@@ -127,10 +291,12 @@ Rules:
 - Always confirm understanding before proceeding
 
 Output format (JSON only, no additional text):
+
+FOR CREATE_EVENT:
 {
-  "action": "create_event" | "clarify" | "error",
+  "action": "create_event",
   "event": {
-    "title": "string (required if action is create_event)",
+    "title": "string (required)",
     "startTime": "ISO8601 datetime (required)",
     "endTime": "ISO8601 datetime (required)",
     "eventType": "string from list above (required)",
@@ -140,6 +306,26 @@ Output format (JSON only, no additional text):
     },
     "description": "string (optional)"
   },
+  "message": "string - Your response to the user",
+  "needsClarification": boolean,
+  "clarificationQuestion": "string (only if needsClarification is true)"
+}
+
+FOR DELETE_EVENT:
+{
+  "action": "delete_event",
+  "eventTitle": "string - Exact title of event to delete (required)",
+  "eventDate": "string - Date in YYYY-MM-DD format (optional but helpful)",
+  "eventTime": "string - Start time for user confirmation (optional)",
+  "hasContacts": boolean - Whether event has associated contacts,
+  "contactCount": number - Number of contacts that will be deleted,
+  "message": "string - Confirmation message with warning if contacts exist",
+  "needsClarification": boolean
+}
+
+FOR CLARIFY OR ERROR:
+{
+  "action": "clarify" | "error",
   "message": "string - Your response to the user",
   "needsClarification": boolean,
   "clarificationQuestion": "string (only if needsClarification is true)"

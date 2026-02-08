@@ -1,0 +1,178 @@
+/**
+ * Google Calendar Service
+ * Handles Google Calendar API integration for importing Luma events
+ */
+
+export interface GoogleCalendarEvent {
+  id: string;
+  summary: string;
+  description?: string;
+  start: {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+  };
+  end: {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+  };
+  location?: string;
+  organizer?: {
+    email: string;
+    displayName?: string;
+  };
+  htmlLink?: string;
+  attendees?: Array<{
+    email: string;
+    displayName?: string;
+    responseStatus?: string;
+  }>;
+}
+
+class GoogleCalendarService {
+  private clientId: string;
+  private redirectUri: string;
+  private scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
+
+  constructor() {
+    this.clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+    this.redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${window.location.origin}/auth/google/callback`;
+  }
+
+  /**
+   * Initiates Google OAuth flow
+   */
+  initiateOAuth(): void {
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.append('client_id', this.clientId);
+    authUrl.searchParams.append('redirect_uri', this.redirectUri);
+    authUrl.searchParams.append('response_type', 'code');
+    authUrl.searchParams.append('scope', this.scopes.join(' '));
+    authUrl.searchParams.append('access_type', 'offline');
+    authUrl.searchParams.append('prompt', 'consent');
+
+    // Store the current itinerary ID in session storage for the callback
+    const currentPath = window.location.pathname;
+    sessionStorage.setItem('google_oauth_return_path', currentPath);
+
+    window.location.href = authUrl.toString();
+  }
+
+  /**
+   * Exchanges authorization code for access token (server-side)
+   */
+  async exchangeCodeForToken(code: string): Promise<{ accessToken: string; refreshToken?: string }> {
+    const response = await fetch('/api/google-calendar/exchange-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to exchange code for token');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Fetches Luma events from Google Calendar
+   * Only returns events where organizer email is "calendar-invite@lu.ma"
+   */
+  async fetchLumaEvents(
+    accessToken: string,
+    timeMin?: string,
+    timeMax?: string
+  ): Promise<GoogleCalendarEvent[]> {
+    const response = await fetch('/api/google-calendar/luma-events', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        accessToken,
+        timeMin,
+        timeMax,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch Luma events');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Converts Google Calendar event to our ItineraryEvent format
+   */
+  convertToItineraryEvent(gcalEvent: GoogleCalendarEvent): any {
+    const startTime = gcalEvent.start.dateTime || gcalEvent.start.date;
+    const endTime = gcalEvent.end.dateTime || gcalEvent.end.date;
+
+    // Extract Luma URL from description if present
+    let lumaEventUrl: string | undefined;
+    if (gcalEvent.description) {
+      const lumaUrlMatch = gcalEvent.description.match(/https?:\/\/lu\.ma\/[^\s<>)]+/);
+      if (lumaUrlMatch) {
+        lumaEventUrl = lumaUrlMatch[0];
+      }
+    }
+
+    return {
+      title: gcalEvent.summary,
+      start_time: startTime,
+      end_time: endTime,
+      event_type: 'side-event', // Default to side-event for Luma events
+      location: gcalEvent.location ? {
+        name: gcalEvent.location,
+        address: gcalEvent.location
+      } : undefined,
+      description: gcalEvent.description || '',
+      luma_event_url: lumaEventUrl,
+      // Mark as imported from Google Calendar
+      _imported_from: 'google_calendar',
+      _gcal_event_id: gcalEvent.id,
+      _gcal_link: gcalEvent.htmlLink
+    };
+  }
+
+  /**
+   * Stores access token securely (in memory for this session)
+   * In production, this should be encrypted and stored securely
+   */
+  storeAccessToken(accessToken: string, refreshToken?: string): void {
+    sessionStorage.setItem('google_calendar_access_token', accessToken);
+    if (refreshToken) {
+      sessionStorage.setItem('google_calendar_refresh_token', refreshToken);
+    }
+  }
+
+  /**
+   * Gets stored access token
+   */
+  getAccessToken(): string | null {
+    return sessionStorage.getItem('google_calendar_access_token');
+  }
+
+  /**
+   * Clears stored tokens (logout)
+   */
+  clearTokens(): void {
+    sessionStorage.removeItem('google_calendar_access_token');
+    sessionStorage.removeItem('google_calendar_refresh_token');
+  }
+
+  /**
+   * Checks if user is connected to Google Calendar
+   */
+  isConnected(): boolean {
+    return !!this.getAccessToken();
+  }
+}
+
+export const googleCalendarService = new GoogleCalendarService();

@@ -7,6 +7,7 @@ import EditEventDialog from './EditEventDialog';
 import ContactForm from './ContactForm';
 import ContactsList from './ContactsList';
 import { AIAssistantModal } from './AIAssistant/AIAssistantModal';
+import GoogleCalendarImport from './GoogleCalendarImport';
 import { normalizeEvent } from '../utils/eventNormalizer';
 import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
 
@@ -17,7 +18,7 @@ interface ItineraryTimelineProps {
 
 export default function ItineraryTimeline({ sharedItinerary, readOnly = false }: ItineraryTimelineProps = {}) {
   const { currentItinerary, deleteEvent, clearItinerary, addEvent } = useItinerary();
-  const { getContactsByEvent, deleteContactsByEvent } = useContacts();
+  const { getContactsByEvent, deleteContactsByEvent, getContactsByItinerary } = useContacts();
   const { user } = useAuth();
   const [selectedDay, setSelectedDay] = useState<ItineraryDay | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
@@ -85,6 +86,33 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
     }
   };
 
+  const handleGoogleCalendarImport = async (events: any[]) => {
+    try {
+      console.log(`Importing ${events.length} events from Google Calendar`);
+
+      for (const event of events) {
+        // Validate and add each event
+        if (!event.start_time || !event.end_time) {
+          console.warn('Skipping event with missing time fields:', event);
+          continue;
+        }
+
+        const startDate = new Date(event.start_time);
+        if (isNaN(startDate.getTime())) {
+          console.warn('Skipping event with invalid date:', event);
+          continue;
+        }
+
+        await addEvent(event);
+      }
+
+      alert(`Successfully imported ${events.length} event${events.length !== 1 ? 's' : ''} from Google Calendar!`);
+    } catch (error) {
+      console.error('Error importing events:', error);
+      alert('Failed to import some events. Please try again.');
+    }
+  };
+
   const handleAIEventCreate = async (event: any) => {
     try {
       console.log('AI Event received:', event);
@@ -144,7 +172,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
             )}
           </div>
           {!readOnly && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setShowAIAssistant(true)}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
@@ -154,6 +182,10 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                 </svg>
                 ✨ AI Assistant
               </button>
+              <GoogleCalendarImport
+                itinerary={itinerary}
+                onEventsImport={handleGoogleCalendarImport}
+              />
               <button
                 onClick={() => {
                   if (confirm('Are you sure you want to start over?')) {
@@ -388,7 +420,17 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
           itinerary={itinerary}
           currentDate={new Date().toISOString().split('T')[0]} // Pass today's date
           existingEvents={itinerary.days.flatMap((day) => day.events)}
+          contacts={getContactsByItinerary(itinerary.id)}
           onEventCreate={handleAIEventCreate}
+          onEventDelete={async (eventId: string, eventTitle: string) => {
+            const eventContacts = getContactsByEvent(eventId);
+            // Delete associated contacts first
+            if (eventContacts.length > 0) {
+              await deleteContactsByEvent(eventId);
+            }
+            // Then delete the event
+            await deleteEvent(eventId);
+          }}
           user={user}
         />
       )}

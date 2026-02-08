@@ -25,7 +25,9 @@ interface AIAssistantModalProps {
   itinerary: any;
   currentDate?: string;
   existingEvents?: any[];
+  contacts?: any[];
   onEventCreate: (event: any) => void;
+  onEventDelete: (eventId: string, eventTitle: string) => Promise<void>;
   user: any;
 }
 
@@ -35,7 +37,9 @@ export function AIAssistantModal({
   itinerary,
   currentDate,
   existingEvents = [],
+  contacts = [],
   onEventCreate,
+  onEventDelete,
   user
 }: AIAssistantModalProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -107,7 +111,7 @@ export function AIAssistantModal({
           {
             id: Date.now().toString(),
             role: 'assistant',
-            content: `Hi! I'm your AI assistant. I can help you create events for "${itinerary.title}". Just tell me what you'd like to add, for example:\n\n• "My flight arrives at 8am on Feb 9"\n• "Lunch meeting with Sarah at noon tomorrow"\n• "Conference keynote from 10am to 11:30am on Monday"\n\nWhat would you like to add?`,
+            content: `Hi! I'm your AI assistant for "${itinerary.title}". I can help you:\n\n• **Manage events** - Add or delete events using natural language\n• **View your schedule** - Ask "What's on my schedule for Feb 9?"\n• **Search contacts** - Find people you've met, like "Who did I meet at the networking event?"\n• **Plan logistics** - Calculate transit times and identify tight transitions\n\nExamples:\n• "My flight arrives at 8am on Feb 9"\n• "Show me what I have tomorrow"\n• "How long between my lunch and next meeting?"\n• "Who did I meet on Feb 9?"\n\nHow can I help you today?`,
             timestamp: new Date()
           }
         ]);
@@ -169,7 +173,20 @@ export function AIAssistantModal({
           startTime: e.startTime,
           endTime: e.endTime,
           eventType: e.eventType,
-          date: e.startTime ? new Date(e.startTime).toISOString().split('T')[0] : ''
+          date: e.startTime ? new Date(e.startTime).toISOString().split('T')[0] : '',
+          location: e.location ? {
+            name: e.location.name || '',
+            address: e.location.address || ''
+          } : undefined
+        })),
+        contacts: contacts.map((c) => ({
+          firstName: c.firstName || c.first_name,
+          lastName: c.lastName || c.last_name,
+          projectCompany: c.projectCompany || c.project_company,
+          position: c.position,
+          eventTitle: c.eventTitle || c.event_title,
+          dateMet: c.dateMet || c.date_met,
+          notes: c.notes
         }))
       };
 
@@ -201,6 +218,18 @@ export function AIAssistantModal({
         setSuggestedEvent(response.event);
       }
 
+      // If delete was requested, store it for confirmation
+      if (response.action === 'delete_event' && response.eventTitle) {
+        setSuggestedEvent({
+          _deleteAction: true,
+          eventTitle: response.eventTitle,
+          eventDate: response.eventDate,
+          eventTime: response.eventTime,
+          hasContacts: response.hasContacts,
+          contactCount: response.contactCount
+        });
+      }
+
       // Track usage
       await aiService.trackUsage(user.id, 'event_creation', 1000, 1, true);
 
@@ -229,30 +258,76 @@ export function AIAssistantModal({
     }
   };
 
-  const handleConfirmEvent = () => {
+  const handleConfirmEvent = async () => {
     if (!suggestedEvent) return;
 
-    // Convert AI event format to app event format
-    const event = {
-      title: suggestedEvent.title,
-      start_time: suggestedEvent.startTime,
-      end_time: suggestedEvent.endTime,
-      event_type: suggestedEvent.eventType,
-      location: suggestedEvent.location,
-      description: suggestedEvent.description || ''
-    };
+    // Check if this is a delete action
+    if (suggestedEvent._deleteAction) {
+      // Find the event to delete
+      const normalizedEvents = normalizeEvents(existingEvents);
+      const eventToDelete = normalizedEvents.find((e) =>
+        e.title.toLowerCase().includes(suggestedEvent.eventTitle.toLowerCase()) ||
+        suggestedEvent.eventTitle.toLowerCase().includes(e.title.toLowerCase())
+      );
 
-    onEventCreate(event);
-    setSuggestedEvent(null);
+      if (eventToDelete) {
+        try {
+          await onEventDelete(eventToDelete.id, eventToDelete.title);
+          setSuggestedEvent(null);
 
-    // Add confirmation message
-    const confirmMsg: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: `✅ Event "${suggestedEvent.title}" has been added to your itinerary! Would you like to add anything else?`,
-      timestamp: new Date()
-    };
-    setMessages((prev) => [...prev, confirmMsg]);
+          // Add confirmation message
+          const confirmMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `✅ Event "${eventToDelete.title}" has been deleted from your itinerary${suggestedEvent.hasContacts ? ` along with ${suggestedEvent.contactCount} contact${suggestedEvent.contactCount > 1 ? 's' : ''}` : ''}. Anything else I can help with?`,
+            timestamp: new Date()
+          };
+          setMessages((prev) => [...prev, confirmMsg]);
+        } catch (error) {
+          console.error('Error deleting event:', error);
+          const errorMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `❌ Sorry, I couldn't delete that event. Please try again or delete it manually.`,
+            timestamp: new Date()
+          };
+          setMessages((prev) => [...prev, errorMsg]);
+        }
+      } else {
+        // Event not found
+        const errorMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `❌ I couldn't find the event "${suggestedEvent.eventTitle}" in your schedule. It may have already been deleted.`,
+          timestamp: new Date()
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+        setSuggestedEvent(null);
+      }
+    } else {
+      // Regular create event action
+      // Convert AI event format to app event format
+      const event = {
+        title: suggestedEvent.title,
+        start_time: suggestedEvent.startTime,
+        end_time: suggestedEvent.endTime,
+        event_type: suggestedEvent.eventType,
+        location: suggestedEvent.location,
+        description: suggestedEvent.description || ''
+      };
+
+      onEventCreate(event);
+      setSuggestedEvent(null);
+
+      // Add confirmation message
+      const confirmMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `✅ Event "${suggestedEvent.title}" has been added to your itinerary! Would you like to add anything else?`,
+        timestamp: new Date()
+      };
+      setMessages((prev) => [...prev, confirmMsg]);
+    }
   };
 
   const handleCancelEvent = () => {
@@ -283,7 +358,7 @@ export function AIAssistantModal({
         {
           id: Date.now().toString(),
           role: 'assistant',
-          content: `Hi! I'm your AI assistant. I can help you create events for "${itinerary.title}". Just tell me what you'd like to add, for example:\n\n• "My flight arrives at 8am on Feb 9"\n• "Lunch meeting with Sarah at noon tomorrow"\n• "Conference keynote from 10am to 11:30am on Monday"\n\nWhat would you like to add?`,
+          content: `Hi! I'm your AI assistant for "${itinerary.title}". I can help you:\n\n• **Manage events** - Add or delete events using natural language\n• **View your schedule** - Ask "What's on my schedule for Feb 9?"\n• **Search contacts** - Find people you've met, like "Who did I meet at the networking event?"\n• **Plan logistics** - Calculate transit times between events (coming soon)\n\nExamples:\n• "My flight arrives at 8am on Feb 9"\n• "Show me what I have tomorrow"\n• "Delete the lunch meeting on Monday"\n• "Who did I meet on Feb 9?"\n\nHow can I help you today?`,
           timestamp: new Date()
         }
       ]);
@@ -305,15 +380,13 @@ export function AIAssistantModal({
             <div className="text-sm text-gray-600">
               {usageInfo.remaining}/{usageInfo.limit} queries remaining
             </div>
-            {messages.length > 1 && (
-              <button
-                onClick={handleClearConversation}
-                className="text-xs text-gray-500 hover:text-gray-700 transition-colors px-2 py-1 rounded hover:bg-gray-100"
-                title="Clear conversation history"
-              >
-                Clear
-              </button>
-            )}
+            <button
+              onClick={handleClearConversation}
+              className="text-xs text-gray-500 hover:text-gray-700 transition-colors px-2 py-1 rounded hover:bg-gray-100"
+              title="Clear conversation history"
+            >
+              Clear
+            </button>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -361,31 +434,52 @@ export function AIAssistantModal({
 
         {/* Event Confirmation */}
         {suggestedEvent && (
-          <div className="px-6 py-4 bg-purple-50 border-t border-purple-200">
+          <div className={`px-6 py-4 border-t ${suggestedEvent._deleteAction ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-200'}`}>
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900 mb-2">
-                  Confirm Event:
+                  {suggestedEvent._deleteAction ? 'Confirm Deletion:' : 'Confirm Event:'}
                 </p>
-                <div className="space-y-1 text-sm text-gray-700">
-                  <p><strong>Title:</strong> {suggestedEvent.title}</p>
-                  <p>
-                    <strong>Time:</strong>{' '}
-                    {new Date(suggestedEvent.startTime).toLocaleString()} -{' '}
-                    {new Date(suggestedEvent.endTime).toLocaleTimeString()}
-                  </p>
-                  <p><strong>Type:</strong> {suggestedEvent.eventType}</p>
-                  {suggestedEvent.location && (
-                    <p><strong>Location:</strong> {suggestedEvent.location.name}</p>
-                  )}
-                </div>
+                {suggestedEvent._deleteAction ? (
+                  <div className="space-y-1 text-sm text-gray-700">
+                    <p><strong>Event:</strong> {suggestedEvent.eventTitle}</p>
+                    {suggestedEvent.eventDate && (
+                      <p><strong>Date:</strong> {new Date(suggestedEvent.eventDate).toLocaleDateString()}</p>
+                    )}
+                    {suggestedEvent.eventTime && (
+                      <p><strong>Time:</strong> {suggestedEvent.eventTime}</p>
+                    )}
+                    {suggestedEvent.hasContacts && (
+                      <p className="text-red-600 font-medium mt-2">
+                        ⚠️ {suggestedEvent.contactCount} contact{suggestedEvent.contactCount > 1 ? 's' : ''} will also be deleted
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-1 text-sm text-gray-700">
+                    <p><strong>Title:</strong> {suggestedEvent.title}</p>
+                    <p>
+                      <strong>Time:</strong>{' '}
+                      {new Date(suggestedEvent.startTime).toLocaleString()} -{' '}
+                      {new Date(suggestedEvent.endTime).toLocaleTimeString()}
+                    </p>
+                    <p><strong>Type:</strong> {suggestedEvent.eventType}</p>
+                    {suggestedEvent.location && (
+                      <p><strong>Location:</strong> {suggestedEvent.location.name}</p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 ml-4">
                 <button
                   onClick={handleConfirmEvent}
-                  className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                  className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${
+                    suggestedEvent._deleteAction
+                      ? 'bg-red-600 hover:bg-red-700'
+                      : 'bg-purple-600 hover:bg-purple-700'
+                  }`}
                 >
-                  Add Event
+                  {suggestedEvent._deleteAction ? 'Delete Event' : 'Add Event'}
                 </button>
                 <button
                   onClick={handleCancelEvent}
