@@ -56,6 +56,7 @@ export interface Itinerary {
   id: string;
   title: string;
   description?: string;
+  goals?: string; // Overall trip goals
   startDate: string; // ISO8601 date
   endDate: string; // ISO8601 date
   location: string; // Primary location (e.g., "Hong Kong")

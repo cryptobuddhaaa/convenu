@@ -271,7 +271,7 @@ export function AIAssistantModal({
 
       if (eventToDelete) {
         try {
-          await onEventDelete(eventToDelete.id, eventToDelete.title);
+          await onEventDelete(eventToDelete.id);
           setSuggestedEvent(null);
 
           // Add confirmation message

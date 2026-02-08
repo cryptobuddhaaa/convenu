@@ -18,15 +18,12 @@ export default defineConfig(({ mode }) => {
           secure: true,
           rewrite: (path) => path.replace(/^\/api\/claude/, '/v1/messages'),
           configure: (proxy, _options) => {
-            proxy.on('proxyReq', (proxyReq, req, _res) => {
+            proxy.on('proxyReq', (proxyReq, _req, _res) => {
               console.log('Proxying request to Claude API...');
 
-              // Get the body from the request to re-send it
-              if (req.body) {
-                const bodyData = JSON.stringify(req.body);
-                proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-                proxyReq.write(bodyData);
-              }
+              // Note: req.body is not available in Node's IncomingMessage
+              // Body handling is done by the proxy middleware itself
+            }
 
               // Add required headers for Claude API
               proxyReq.setHeader('x-api-key', env.CLAUDE_API_KEY || '');
@@ -38,11 +35,11 @@ export default defineConfig(({ mode }) => {
               proxyReq.removeHeader('referer');
             });
 
-            proxy.on('proxyRes', (proxyRes, req, res) => {
+            proxy.on('proxyRes', (proxyRes, _req, _res) => {
               console.log('Received response from Claude API:', proxyRes.statusCode);
             });
 
-            proxy.on('error', (err, req, res) => {
+            proxy.on('error', (err, _req, _res) => {
               console.error('Proxy error:', err);
             });
           },

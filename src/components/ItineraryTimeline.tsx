@@ -103,7 +103,9 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
           continue;
         }
 
-        await addEvent(event);
+        // Extract date string for addEvent
+        const dateStr = event.start_time.split('T')[0];
+        await addEvent(dateStr, event);
       }
 
       alert(`Successfully imported ${events.length} event${events.length !== 1 ? 's' : ''} from Google Calendar!`);

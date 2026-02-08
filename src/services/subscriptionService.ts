@@ -101,7 +101,7 @@ class SubscriptionService {
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
 
-      const { data, error, count } = await supabase
+      const { data: _data, error, count } = await supabase
         .from('ai_usage')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
