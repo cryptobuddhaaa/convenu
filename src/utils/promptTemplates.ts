@@ -397,16 +397,16 @@ export function getAnalysisPrompt(
 ): string {
   const eventsSummary = events.map((e) => ({
     title: e.title,
-    start: e.start_time,
-    end: e.end_time,
-    type: e.event_type,
+    start: e.startTime,
+    end: e.endTime,
+    type: e.eventType,
     location: e.location?.name
   }));
 
   return `You are analyzing an itinerary for potential conflicts and optimization opportunities.
 
 Itinerary: "${itinerary.title}"
-Dates: ${itinerary.start_date} to ${itinerary.end_date}
+Dates: ${itinerary.startDate} to ${itinerary.endDate}
 Location: ${itinerary.location}
 ${itinerary.goals ? `Goals: ${itinerary.goals}` : ''}
 
@@ -455,7 +455,7 @@ export function getContactBriefingPrompt(
   return `Generate a briefing for an upcoming meeting.
 
 Event: "${event.title}"
-Time: ${event.start_time} to ${event.end_time}
+Time: ${event.startTime} to ${event.endTime}
 Location: ${event.location?.name || 'TBD'}
 
 Attendees/Contacts:

@@ -3,6 +3,8 @@
  * Handles Google Calendar API integration for importing Luma events
  */
 
+import type { ItineraryEvent } from '../models/types';
+
 export interface GoogleCalendarEvent {
   id: string;
   summary: string;
@@ -108,11 +110,11 @@ class GoogleCalendarService {
   }
 
   /**
-   * Converts Google Calendar event to our ItineraryEvent format
+   * Converts Google Calendar event to our ItineraryEvent format (camelCase)
    */
-  convertToItineraryEvent(gcalEvent: GoogleCalendarEvent): any {
-    const startTime = gcalEvent.start.dateTime || gcalEvent.start.date;
-    const endTime = gcalEvent.end.dateTime || gcalEvent.end.date;
+  convertToItineraryEvent(gcalEvent: GoogleCalendarEvent): ItineraryEvent {
+    const startTime = gcalEvent.start.dateTime || gcalEvent.start.date || '';
+    const endTime = gcalEvent.end.dateTime || gcalEvent.end.date || '';
 
     // Extract Luma URL from description if present
     let lumaEventUrl: string | undefined;
@@ -124,20 +126,17 @@ class GoogleCalendarService {
     }
 
     return {
+      id: gcalEvent.id,
       title: gcalEvent.summary,
-      start_time: startTime,
-      end_time: endTime,
-      event_type: 'side-event', // Default to side-event for Luma events
-      location: gcalEvent.location ? {
-        name: gcalEvent.location,
-        address: gcalEvent.location
-      } : undefined,
+      startTime,
+      endTime,
+      eventType: 'side-event',
+      location: gcalEvent.location
+        ? { name: gcalEvent.location, address: gcalEvent.location }
+        : { name: '', address: '' },
       description: gcalEvent.description || '',
-      luma_event_url: lumaEventUrl,
-      // Mark as imported from Google Calendar
-      _imported_from: 'google_calendar',
-      _gcal_event_id: gcalEvent.id,
-      _gcal_link: gcalEvent.htmlLink
+      lumaEventUrl,
+      notes: [],
     };
   }
 

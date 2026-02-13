@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useItinerary } from '../hooks/useItinerary';
+import { useItinerary, generateEventId } from '../hooks/useItinerary';
 import { useContacts } from '../hooks/useContacts';
 import { useAuth } from '../hooks/useAuth';
 import EventForm from './EventForm';
@@ -8,7 +8,6 @@ import ContactForm from './ContactForm';
 import ContactsList from './ContactsList';
 import { AIAssistantModal } from './AIAssistant/AIAssistantModal';
 import GoogleCalendarImport from './GoogleCalendarImport';
-import { normalizeEvent } from '../utils/eventNormalizer';
 import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
 
 interface ItineraryTimelineProps {
@@ -86,59 +85,40 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
     }
   };
 
-  const handleGoogleCalendarImport = async (events: any[]) => {
+  const handleGoogleCalendarImport = async (events: ItineraryEvent[]) => {
     try {
-      console.log(`Importing ${events.length} events from Google Calendar`);
-
       let importedCount = 0;
       let skippedCount = 0;
       const skippedEvents: string[] = [];
 
       for (const event of events) {
-        // Validate and add each event
-        if (!event.start_time || !event.end_time) {
-          console.warn('Skipping event with missing time fields:', event);
+        if (!event.startTime || !event.endTime) {
           skippedCount++;
           continue;
         }
 
-        const startDate = new Date(event.start_time);
+        const startDate = new Date(event.startTime);
         if (isNaN(startDate.getTime())) {
-          console.warn('Skipping event with invalid date:', event);
           skippedCount++;
           continue;
         }
 
         // Check for duplicate events by matching title and start time
-        // Note: existingEvent uses camelCase (startTime), imported event uses snake_case (start_time)
-        const incomingStartTime = event.start_time || event.startTime;
         const isDuplicate = itinerary.days.some(day =>
           day.events.some(existingEvent => {
             const titleMatch = existingEvent.title.trim().toLowerCase() === event.title.trim().toLowerCase();
-            const timeMatch = existingEvent.startTime === incomingStartTime;
-
-            if (titleMatch && timeMatch) {
-              console.log('Duplicate detected:', {
-                existingTitle: existingEvent.title,
-                existingStartTime: existingEvent.startTime,
-                incomingTitle: event.title,
-                incomingStartTime: incomingStartTime
-              });
-            }
-
+            const timeMatch = existingEvent.startTime === event.startTime;
             return titleMatch && timeMatch;
           })
         );
 
         if (isDuplicate) {
-          console.log(`Skipping duplicate event: ${event.title}`);
           skippedEvents.push(event.title);
           skippedCount++;
           continue;
         }
 
-        // Extract date string for addEvent
-        const dateStr = event.start_time.split('T')[0];
+        const dateStr = event.startTime.split('T')[0];
         await addEvent(dateStr, event);
         importedCount++;
       }
@@ -163,32 +143,20 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
     }
   };
 
-  const handleAIEventCreate = async (event: any) => {
+  const handleAIEventCreate = async (event: Partial<ItineraryEvent>) => {
     try {
-      console.log('AI Event received:', event);
-
-      // Validate that we have the required fields
-      // Note: AIAssistantModal already converts camelCase to snake_case
-      if (!event.start_time || !event.end_time) {
-        console.error('Missing time fields:', event);
+      if (!event.startTime || !event.endTime) {
         alert('Event is missing required time information. Please try again.');
         return;
       }
 
-      console.log('Event validated:', event);
-
-      // Find the day this event belongs to
-      // Validate the date can be parsed
-      const startDate = new Date(event.start_time);
+      const startDate = new Date(event.startTime);
       if (isNaN(startDate.getTime())) {
-        console.error('Invalid start_time:', event.start_time);
         alert('Event has an invalid date/time. Please try again.');
         return;
       }
 
       const eventDate = startDate.toISOString().split('T')[0];
-      console.log('Looking for day:', eventDate);
-
       const day = itinerary.days.find((d) => d.date === eventDate);
 
       if (!day) {
@@ -196,11 +164,20 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
         return;
       }
 
-      // Add the event
-      await addEvent(day.date, event);
+      // Ensure the event has an id and notes array
+      const fullEvent: ItineraryEvent = {
+        id: generateEventId(),
+        title: event.title || 'Untitled Event',
+        startTime: event.startTime,
+        endTime: event.endTime,
+        eventType: event.eventType || 'activity',
+        location: event.location || { name: '', address: '' },
+        description: event.description,
+        notes: event.notes || [],
+        ...event,
+      };
 
-      // Close the modal after successful creation
-      // (Modal will show confirmation message first)
+      await addEvent(day.date, fullEvent);
     } catch (error) {
       console.error('Error creating AI event:', error);
       alert('Failed to create event. Please try again.');
@@ -304,8 +281,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                 <p className="text-gray-500 text-center py-8">No events scheduled for this day</p>
               ) : (
                 <div className="space-y-4">
-              {day.events
-                .map((e) => normalizeEvent(e)) // Normalize to camelCase
+              {[...day.events]
                 .sort((a, b) => {
                   // Sort events by start time
                   return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();

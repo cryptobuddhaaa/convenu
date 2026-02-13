@@ -8,7 +8,7 @@ import { X, Send, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import aiService from '../../services/aiService';
 import { PaywallModal } from '../Premium/PaywallModal';
 import { sanitizeText } from '../../lib/validation';
-import { normalizeEvents } from '../../utils/eventNormalizer';
+import type { ItineraryEvent } from '../../models/types';
 
 interface Message {
   id: string;
@@ -156,18 +156,15 @@ export function AIAssistantModal({
     setError(null);
 
     try {
-      // Prepare context
-      // Normalize all events to camelCase format
-      const normalizedEvents = normalizeEvents(existingEvents);
-
+      // Prepare context — events are already camelCase from the store
       const context = {
         title: itinerary.title,
-        startDate: itinerary.start_date,
-        endDate: itinerary.end_date,
+        startDate: itinerary.startDate,
+        endDate: itinerary.endDate,
         location: itinerary.location,
         goals: itinerary.goals,
         currentDate,
-        existingEvents: normalizedEvents.map((e) => ({
+        existingEvents: existingEvents.map((e) => ({
           title: e.title,
           startTime: e.startTime,
           endTime: e.endTime,
@@ -179,12 +176,12 @@ export function AIAssistantModal({
           } : undefined
         })),
         contacts: contacts.map((c) => ({
-          firstName: c.firstName || c.first_name,
-          lastName: c.lastName || c.last_name,
-          projectCompany: c.projectCompany || c.project_company,
+          firstName: c.firstName,
+          lastName: c.lastName,
+          projectCompany: c.projectCompany,
           position: c.position,
-          eventTitle: c.eventTitle || c.event_title,
-          dateMet: c.dateMet || c.date_met,
+          eventTitle: c.eventTitle,
+          dateMet: c.dateMet,
           notes: c.notes
         }))
       };
@@ -263,8 +260,7 @@ export function AIAssistantModal({
     // Check if this is a delete action
     if (suggestedEvent._deleteAction) {
       // Find the event to delete
-      const normalizedEvents = normalizeEvents(existingEvents);
-      const eventToDelete = normalizedEvents.find((e) =>
+      const eventToDelete = existingEvents.find((e: ItineraryEvent) =>
         e.title.toLowerCase().includes(suggestedEvent.eventTitle.toLowerCase()) ||
         suggestedEvent.eventTitle.toLowerCase().includes(e.title.toLowerCase())
       );
@@ -304,13 +300,12 @@ export function AIAssistantModal({
         setSuggestedEvent(null);
       }
     } else {
-      // Regular create event action
-      // Convert AI event format to app event format
+      // Regular create event action — pass camelCase matching ItineraryEvent
       const event = {
         title: suggestedEvent.title,
-        start_time: suggestedEvent.startTime,
-        end_time: suggestedEvent.endTime,
-        event_type: suggestedEvent.eventType,
+        startTime: suggestedEvent.startTime,
+        endTime: suggestedEvent.endTime,
+        eventType: suggestedEvent.eventType,
         location: suggestedEvent.location,
         description: suggestedEvent.description || ''
       };

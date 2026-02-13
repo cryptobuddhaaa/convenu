@@ -4,7 +4,6 @@ import { CreateEventSchema } from '../lib/validation';
 import { z } from 'zod';
 import { lumaService } from '../services/lumaService';
 import { mapsService } from '../services/mapsService';
-import { normalizeEvent } from '../utils/eventNormalizer';
 import type { ItineraryEvent, EventType } from '../models/types';
 
 interface EditEventDialogProps {
@@ -13,11 +12,8 @@ interface EditEventDialogProps {
   onClose: () => void;
 }
 
-export default function EditEventDialog({ event: rawEvent, dayDate, onClose }: EditEventDialogProps) {
+export default function EditEventDialog({ event, dayDate, onClose }: EditEventDialogProps) {
   const { updateEvent } = useItinerary();
-
-  // Normalize event to ensure consistent camelCase properties
-  const event = normalizeEvent(rawEvent);
 
   // Extract time from ISO datetime
   const startTime = event.startTime?.split('T')[1]?.slice(0, 5) || '';
