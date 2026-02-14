@@ -8,6 +8,18 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+interface GoogleCalendarItem {
+  id: string;
+  summary: string;
+  description?: string;
+  start: { dateTime?: string; date?: string; timeZone?: string };
+  end: { dateTime?: string; date?: string; timeZone?: string };
+  location?: string;
+  organizer?: { email: string; displayName?: string };
+  htmlLink?: string;
+  attendees?: Array<{ email: string; displayName?: string; responseStatus?: string }>;
+}
+
 const LUMA_ORGANIZER_EMAIL = 'calendar-invite@lu.ma';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -60,10 +72,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const data = await calendarResponse.json();
-    const allEvents = data.items || [];
+    const allEvents: GoogleCalendarItem[] = data.items || [];
 
     // Filter to only Luma events (organizer email matches)
-    const lumaEvents = allEvents.filter((event: any) => {
+    const lumaEvents = allEvents.filter((event) => {
       const organizerEmail = event.organizer?.email?.toLowerCase();
       const isLuma = organizerEmail === LUMA_ORGANIZER_EMAIL.toLowerCase();
 

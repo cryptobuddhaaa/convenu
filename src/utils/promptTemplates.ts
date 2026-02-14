@@ -2,7 +2,9 @@
  * Prompt templates for AI assistant
  */
 
-interface ItineraryContext {
+import type { Itinerary, ItineraryEvent, Contact } from '../models/types';
+
+export interface ItineraryContext {
   title: string;
   startDate: string;
   endDate: string;
@@ -392,8 +394,8 @@ Now parse the user's message and return ONLY valid JSON with no additional text.
 }
 
 export function getAnalysisPrompt(
-  itinerary: any,
-  events: any[]
+  itinerary: Itinerary,
+  events: ItineraryEvent[]
 ): string {
   const eventsSummary = events.map((e) => ({
     title: e.title,
@@ -449,8 +451,8 @@ Return a JSON object with this structure:
 }
 
 export function getContactBriefingPrompt(
-  event: any,
-  contacts: any[]
+  event: ItineraryEvent,
+  contacts: Contact[]
 ): string {
   return `Generate a briefing for an upcoming meeting.
 

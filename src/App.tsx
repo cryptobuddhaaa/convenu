@@ -9,6 +9,7 @@ import ItineraryList from './components/ItineraryList';
 import ItineraryTimeline from './components/ItineraryTimeline';
 import ShareDialog from './components/ShareDialog';
 import ContactsPage from './components/ContactsPage';
+import type { Itinerary } from './models/types';
 
 type ActiveTab = 'itinerary' | 'contacts' | 'shared';
 
@@ -20,9 +21,9 @@ function App() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('itinerary');
   const [prevItineraryCount, setPrevItineraryCount] = useState(itineraries.length);
-  const [sharedItinerary, setSharedItinerary] = useState<any>(null);
-  const [viewedSharedItineraries, setViewedSharedItineraries] = useState<any[]>([]);
-  const [selectedSharedItinerary, setSelectedSharedItinerary] = useState<any>(null);
+  const [sharedItinerary, setSharedItinerary] = useState<Itinerary | null>(null);
+  const [viewedSharedItineraries, setViewedSharedItineraries] = useState<Itinerary[]>([]);
+  const [selectedSharedItinerary, setSelectedSharedItinerary] = useState<Itinerary | null>(null);
 
   const itinerary = currentItinerary();
 

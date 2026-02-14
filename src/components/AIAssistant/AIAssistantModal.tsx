@@ -5,29 +5,41 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 import aiService from '../../services/aiService';
 import { PaywallModal } from '../Premium/PaywallModal';
 import { sanitizeText } from '../../lib/validation';
-import type { ItineraryEvent } from '../../models/types';
+import type { Itinerary, ItineraryEvent, Contact } from '../../models/types';
+
+interface SuggestedEvent {
+  title: string;
+  startTime: string;
+  endTime: string;
+  eventType: string;
+  location?: { name: string; address?: string };
+  description?: string;
+  _deleteAction?: boolean;
+  eventTitle?: string;
+}
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  suggestedEvent?: any;
+  suggestedEvent?: SuggestedEvent;
 }
 
 interface AIAssistantModalProps {
   isOpen: boolean;
   onClose: () => void;
-  itinerary: any;
+  itinerary: Itinerary;
   currentDate?: string;
-  existingEvents?: any[];
-  contacts?: any[];
-  onEventCreate: (event: any) => void;
+  existingEvents?: ItineraryEvent[];
+  contacts?: Contact[];
+  onEventCreate: (event: Partial<ItineraryEvent>) => void;
   onEventDelete: (eventId: string) => Promise<void>;
-  user: any;
+  user: User;
 }
 
 export function AIAssistantModal({
@@ -63,7 +75,7 @@ export function AIAssistantModal({
       try {
         const parsed = JSON.parse(stored);
         // Convert timestamp strings back to Date objects
-        const restoredMessages = parsed.map((msg: any) => ({
+        const restoredMessages: Message[] = parsed.map((msg: Omit<Message, 'timestamp'> & { timestamp: string }) => ({
           ...msg,
           timestamp: new Date(msg.timestamp)
         }));
@@ -237,9 +249,9 @@ export function AIAssistantModal({
 
       // Recheck usage limit to get fresh data
       await checkUsageLimit();
-    } catch (error: any) {
+    } catch (error) {
       console.error('AI assistant error:', error);
-      setError(error.message || 'Failed to process your request. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to process your request. Please try again.');
 
       // Add error message
       const errorMsg: Message = {

@@ -182,7 +182,7 @@ function parseEventHtml(html: string): LumaEventData | null {
 
         // Handle both single Event and array of schemas
         const eventSchema = Array.isArray(jsonData)
-          ? jsonData.find((item: any) => item['@type'] === 'Event')
+          ? jsonData.find((item: Record<string, unknown>) => item['@type'] === 'Event')
           : (jsonData['@type'] === 'Event' ? jsonData : null);
 
         if (eventSchema) {

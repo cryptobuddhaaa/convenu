@@ -6,10 +6,11 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Download, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { googleCalendarService, type GoogleCalendarEvent } from '../services/googleCalendarService';
+import type { Itinerary, ItineraryEvent } from '../models/types';
 
 interface GoogleCalendarImportProps {
-  itinerary: any;
-  onEventsImport: (events: any[]) => Promise<void>;
+  itinerary: Itinerary;
+  onEventsImport: (events: ItineraryEvent[]) => Promise<void>;
 }
 
 export default function GoogleCalendarImport({ itinerary, onEventsImport }: GoogleCalendarImportProps) {
@@ -78,12 +79,13 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       } else {
         setError(`No Luma events found in your calendar between ${new Date(itinerary.startDate).toLocaleDateString()} and ${new Date(itinerary.endDate).toLocaleDateString()}. Make sure you have Luma events (from lu.ma) in this date range.`);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching Luma events:', err);
-      setError(err.message || 'Failed to fetch Luma events');
+      const message = err instanceof Error ? err.message : 'Failed to fetch Luma events';
+      setError(message);
 
       // If token expired, disconnect
-      if (err.message.includes('expired') || err.message.includes('invalid')) {
+      if (message.includes('expired') || message.includes('invalid')) {
         handleDisconnect();
       }
     } finally {
@@ -119,9 +121,9 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       setShowPreview(false);
       setLumaEvents([]);
       setSelectedEvents(new Set());
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error importing events:', err);
-      setError(err.message || 'Failed to import events');
+      setError(err instanceof Error ? err.message : 'Failed to import events');
     } finally {
       setIsLoading(false);
     }
