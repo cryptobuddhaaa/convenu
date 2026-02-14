@@ -11,16 +11,22 @@ import { PaywallModal } from '../Premium/PaywallModal';
 import { sanitizeText } from '../../lib/validation';
 import type { Itinerary, ItineraryEvent, Contact } from '../../models/types';
 
-interface SuggestedEvent {
+type SuggestedEvent = {
+  _deleteAction?: false;
   title: string;
   startTime: string;
   endTime: string;
   eventType: string;
   location?: { name: string; address?: string };
   description?: string;
-  _deleteAction?: boolean;
-  eventTitle?: string;
-}
+} | {
+  _deleteAction: true;
+  eventTitle: string;
+  eventDate?: string;
+  eventTime?: string;
+  hasContacts?: boolean;
+  contactCount?: number;
+};
 
 interface Message {
   id: string;
@@ -57,7 +63,7 @@ export function AIAssistantModal({
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [suggestedEvent, setSuggestedEvent] = useState<any | null>(null);
+  const [suggestedEvent, setSuggestedEvent] = useState<SuggestedEvent | null>(null);
   const [usageInfo, setUsageInfo] = useState({
     remaining: 3,
     limit: 3,
@@ -271,10 +277,11 @@ export function AIAssistantModal({
 
     // Check if this is a delete action
     if (suggestedEvent._deleteAction) {
+      const targetTitle = suggestedEvent.eventTitle;
       // Find the event to delete
       const eventToDelete = existingEvents.find((e: ItineraryEvent) =>
-        e.title.toLowerCase().includes(suggestedEvent.eventTitle.toLowerCase()) ||
-        suggestedEvent.eventTitle.toLowerCase().includes(e.title.toLowerCase())
+        e.title.toLowerCase().includes(targetTitle.toLowerCase()) ||
+        targetTitle.toLowerCase().includes(e.title.toLowerCase())
       );
 
       if (eventToDelete) {
@@ -286,7 +293,7 @@ export function AIAssistantModal({
           const confirmMsg: Message = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: `✅ Event "${eventToDelete.title}" has been deleted from your itinerary${suggestedEvent.hasContacts ? ` along with ${suggestedEvent.contactCount} contact${suggestedEvent.contactCount > 1 ? 's' : ''}` : ''}. Anything else I can help with?`,
+            content: `✅ Event "${eventToDelete.title}" has been deleted from your itinerary${suggestedEvent.hasContacts ? ` along with ${suggestedEvent.contactCount ?? 0} contact${(suggestedEvent.contactCount ?? 0) > 1 ? 's' : ''}` : ''}. Anything else I can help with?`,
             timestamp: new Date()
           };
           setMessages((prev) => [...prev, confirmMsg]);
@@ -313,12 +320,12 @@ export function AIAssistantModal({
       }
     } else {
       // Regular create event action — pass camelCase matching ItineraryEvent
-      const event = {
+      const event: Partial<ItineraryEvent> = {
         title: suggestedEvent.title,
         startTime: suggestedEvent.startTime,
         endTime: suggestedEvent.endTime,
-        eventType: suggestedEvent.eventType,
-        location: suggestedEvent.location,
+        eventType: suggestedEvent.eventType as ItineraryEvent['eventType'],
+        location: suggestedEvent.location ? { name: suggestedEvent.location.name, address: suggestedEvent.location.address ?? '' } : undefined,
         description: suggestedEvent.description || ''
       };
 
@@ -457,7 +464,7 @@ export function AIAssistantModal({
                     )}
                     {suggestedEvent.hasContacts && (
                       <p className="text-red-600 font-medium mt-2">
-                        ⚠️ {suggestedEvent.contactCount} contact{suggestedEvent.contactCount > 1 ? 's' : ''} will also be deleted
+                        ⚠️ {suggestedEvent.contactCount ?? 0} contact{(suggestedEvent.contactCount ?? 0) > 1 ? 's' : ''} will also be deleted
                       </p>
                     )}
                   </div>
