@@ -100,34 +100,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Filter to only Luma events
     const lumaEvents = allEvents.filter(isLumaEvent);
+    const nonMatchingEvents = allEvents.filter((e) => !isLumaEvent(e));
 
-    // When no Luma events found, include diagnostic info to help debug
-    if (lumaEvents.length === 0 && allEvents.length > 0) {
-      const sampleEvents = allEvents.slice(0, 5).map((e) => ({
-        summary: e.summary,
-        organizer: e.organizer?.email || 'none',
-        hasDescription: !!e.description,
-        descriptionSnippet: e.description
-          ? e.description.substring(0, 200)
-          : null,
-        attendeeEmails: e.attendees?.map((a) => a.email).slice(0, 3) || [],
-      }));
-
-      return res.status(200).json({
-        events: [],
-        debug: {
-          totalCalendarEvents: allEvents.length,
-          lumaEventsFound: 0,
-          sampleEvents,
-        },
-      });
-    }
+    // Always include debug info about non-matching events
+    const nonMatchingSamples = nonMatchingEvents.slice(0, 10).map((e) => ({
+      summary: e.summary,
+      organizer: e.organizer?.email || 'none',
+      hasDescription: !!e.description,
+      descriptionSnippet: e.description
+        ? e.description.substring(0, 500)
+        : null,
+      attendeeEmails: e.attendees?.map((a) => a.email).slice(0, 5) || [],
+    }));
 
     return res.status(200).json({
       events: lumaEvents,
       debug: {
         totalCalendarEvents: allEvents.length,
         lumaEventsFound: lumaEvents.length,
+        nonMatchingEvents: nonMatchingSamples,
       },
     });
   } catch (error) {

@@ -69,6 +69,15 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
         timeMaxISO
       );
 
+      // Log debug info to help diagnose detection issues
+      if (debug) {
+        console.log('Luma import debug:', {
+          totalCalendarEvents: debug.totalCalendarEvents,
+          lumaEventsFound: debug.lumaEventsFound,
+          nonMatchingEvents: debug.nonMatchingEvents,
+        });
+      }
+
       setLumaEvents(events);
 
       if (events.length > 0) {
@@ -82,12 +91,12 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
         if (debug && debug.totalCalendarEvents > 0) {
           errorMsg += `\n\nFound ${debug.totalCalendarEvents} calendar event(s) in this range, but none matched Luma filters (organizer @lu.ma, attendee @lu.ma, or lu.ma/luma.com link in description).`;
 
-          if (debug.sampleEvents && debug.sampleEvents.length > 0) {
-            errorMsg += '\n\nSample events found:';
-            for (const sample of debug.sampleEvents) {
+          if (debug.nonMatchingEvents && debug.nonMatchingEvents.length > 0) {
+            errorMsg += '\n\nNon-matching events:';
+            for (const sample of debug.nonMatchingEvents) {
               errorMsg += `\n• "${sample.summary}" — organizer: ${sample.organizer}, description: ${sample.hasDescription ? 'yes' : 'none'}`;
               if (sample.descriptionSnippet) {
-                errorMsg += `\n  Snippet: ${sample.descriptionSnippet.substring(0, 100)}...`;
+                errorMsg += `\n  Snippet: ${sample.descriptionSnippet.substring(0, 200)}`;
               }
             }
           }

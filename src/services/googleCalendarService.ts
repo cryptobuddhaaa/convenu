@@ -8,7 +8,7 @@ import type { ItineraryEvent } from '../models/types';
 export interface LumaEventsDebugInfo {
   totalCalendarEvents: number;
   lumaEventsFound: number;
-  sampleEvents?: Array<{
+  nonMatchingEvents?: Array<{
     summary: string;
     organizer: string;
     hasDescription: boolean;
