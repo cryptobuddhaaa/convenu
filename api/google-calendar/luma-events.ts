@@ -6,7 +6,8 @@
  * Detection methods (any match = Luma event):
  *   1. Organizer email is calendar-invite@lu.ma or contains lu.ma
  *   2. Any attendee has an @lu.ma email address
- *   3. Description contains a lu.ma, luma.com, or www.luma.com link
+ *   3. Description contains a lu.ma or luma.com URL/reference
+ *   4. Location contains a lu.ma or luma.com URL/reference
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -23,8 +24,10 @@ interface GoogleCalendarItem {
   attendees?: Array<{ email: string; displayName?: string; responseStatus?: string }>;
 }
 
-// Matches lu.ma/..., luma.com/event/..., or www.luma.com/event/...
-const LUMA_URL_PATTERN = /https?:\/\/(?:(?:www\.)?luma\.com\/event\/|lu\.ma\/)/i;
+// Matches any luma.com path or lu.ma short links
+const LUMA_URL_PATTERN = /https?:\/\/(?:(?:www\.)?luma\.com\/|lu\.ma\/)/i;
+// Simple substring check as a fallback
+const LUMA_DOMAIN_PATTERN = /(?:lu\.ma|luma\.com)\//i;
 
 function isLumaEvent(event: GoogleCalendarItem): boolean {
   // Check 1: organizer email from lu.ma
@@ -38,8 +41,13 @@ function isLumaEvent(event: GoogleCalendarItem): boolean {
     return true;
   }
 
-  // Check 3: description contains a Luma URL
-  if (event.description && LUMA_URL_PATTERN.test(event.description)) {
+  // Check 3: description contains a Luma URL or domain reference
+  if (event.description && (LUMA_URL_PATTERN.test(event.description) || LUMA_DOMAIN_PATTERN.test(event.description))) {
+    return true;
+  }
+
+  // Check 4: location contains a Luma URL
+  if (event.location && (LUMA_URL_PATTERN.test(event.location) || LUMA_DOMAIN_PATTERN.test(event.location))) {
     return true;
   }
 
