@@ -319,99 +319,73 @@ async function handleEventSelection(
 }
 
 // --- Field input handlers ---
+// Each entry: when in this `state`, save user input to `field`, then move to the next entry.
+// `prompt` is the message shown when ENTERING this state.
 const FIELD_FLOW: Array<{
   state: string;
   field: string;
-  nextState: string;
   prompt: string;
   required: boolean;
 }> = [
   {
     state: 'input_telegram_handle',
     field: 'telegramHandle',
-    nextState: 'input_first_name',
-    prompt: 'Enter their <b>first name</b> (required):\n<i>e.g. John</i>',
+    prompt: 'Enter their <b>Telegram handle</b> (required):\n<i>e.g. @johndoe</i>',
     required: true,
   },
   {
     state: 'input_first_name',
     field: 'firstName',
-    nextState: 'input_last_name',
-    prompt: 'Enter their <b>last name</b> (optional):',
+    prompt: 'Enter their <b>first name</b> (required):\n<i>e.g. John</i>',
     required: true,
   },
   {
     state: 'input_last_name',
     field: 'lastName',
-    nextState: 'input_company',
-    prompt: 'Enter their <b>company / project</b> (optional):',
+    prompt: 'Enter their <b>last name</b> (optional):',
     required: false,
   },
   {
     state: 'input_company',
     field: 'projectCompany',
-    nextState: 'input_position',
-    prompt: 'Enter their <b>position / role</b> (optional):',
+    prompt: 'Enter their <b>company / project</b> (optional):',
     required: false,
   },
   {
     state: 'input_position',
     field: 'position',
-    nextState: 'input_notes',
-    prompt: 'Any <b>notes</b> about this contact? (optional):',
+    prompt: 'Enter their <b>position / role</b> (optional):',
     required: false,
   },
   {
     state: 'input_notes',
     field: 'notes',
-    nextState: 'confirm',
-    prompt: '',
+    prompt: 'Any <b>notes</b> about this contact? (optional):',
     required: false,
   },
 ];
 
-function getFieldConfig(state: string) {
-  return FIELD_FLOW.find((f) => f.state === state);
+function getFieldIndex(state: string): number {
+  return FIELD_FLOW.findIndex((f) => f.state === state);
 }
 
-function getNextFieldConfig(state: string) {
-  const idx = FIELD_FLOW.findIndex((f) => f.state === state);
-  return idx >= 0 && idx < FIELD_FLOW.length - 1 ? FIELD_FLOW[idx + 1] : null;
-}
-
-async function advanceToNextField(
+/** Transition to the next field in the flow, or show confirmation if done. */
+async function goToNextField(
   chatId: number,
   telegramUserId: number,
-  currentState: BotState,
-  contact: Record<string, string>
+  stateData: Record<string, unknown>,
+  currentIndex: number
 ) {
-  const nextField = getNextFieldConfig(currentState.state);
+  const nextIndex = currentIndex + 1;
 
-  if (!nextField || nextField.nextState === 'confirm') {
-    // No more fields — show confirmation
-    if (currentState.state === 'input_notes') {
-      await showConfirmation(chatId, telegramUserId, {
-        ...currentState.data,
-        contact,
-      });
-    } else {
-      const fieldAfterNext = FIELD_FLOW.find(
-        (f) => f.state === nextField?.nextState
-      );
-      if (fieldAfterNext) {
-        await showConfirmation(chatId, telegramUserId, {
-          ...currentState.data,
-          contact,
-        });
-      }
-    }
+  // No more fields → show confirmation
+  if (nextIndex >= FIELD_FLOW.length) {
+    await showConfirmation(chatId, telegramUserId, stateData);
     return;
   }
 
-  await setState(telegramUserId, nextField.state, {
-    ...currentState.data,
-    contact,
-  });
+  const nextField = FIELD_FLOW[nextIndex];
+  await setState(telegramUserId, nextField.state, stateData);
 
   const options: { reply_markup?: object } = {};
   if (!nextField.required) {
@@ -429,9 +403,9 @@ async function handleTextInput(
   text: string
 ) {
   const currentState = await getState(telegramUserId);
-  const fieldConfig = getFieldConfig(currentState.state);
+  const currentIndex = getFieldIndex(currentState.state);
 
-  if (!fieldConfig) {
+  if (currentIndex === -1) {
     await sendMessage(
       chatId,
       'Use /add to add a new contact or /help for commands.'
@@ -439,6 +413,7 @@ async function handleTextInput(
     return;
   }
 
+  const fieldConfig = FIELD_FLOW[currentIndex];
   const contact = { ...(currentState.data.contact as Record<string, string>) };
 
   // Store the field value
@@ -448,34 +423,7 @@ async function handleTextInput(
     contact[fieldConfig.field] = text.trim();
   }
 
-  const updatedState = { ...currentState, data: { ...currentState.data, contact } };
-
-  // If this is the last field (notes), go to confirmation
-  if (fieldConfig.nextState === 'confirm') {
-    await showConfirmation(chatId, telegramUserId, {
-      ...currentState.data,
-      contact,
-    });
-    return;
-  }
-
-  // Move to next field
-  const nextField = FIELD_FLOW.find((f) => f.state === fieldConfig.nextState);
-  if (!nextField) return;
-
-  await setState(telegramUserId, nextField.state, {
-    ...currentState.data,
-    contact,
-  });
-
-  const options: { reply_markup?: object } = {};
-  if (!nextField.required) {
-    options.reply_markup = {
-      inline_keyboard: [[{ text: '⏭ Skip', callback_data: 'skip' }]],
-    };
-  }
-
-  await sendMessage(chatId, nextField.prompt, options);
+  await goToNextField(chatId, telegramUserId, { ...currentState.data, contact }, currentIndex);
 }
 
 async function handleSkip(
@@ -486,37 +434,12 @@ async function handleSkip(
   await answerCallbackQuery(callbackQueryId);
 
   const currentState = await getState(telegramUserId);
-  const fieldConfig = getFieldConfig(currentState.state);
-  if (!fieldConfig) return;
+  const currentIndex = getFieldIndex(currentState.state);
+  if (currentIndex === -1) return;
 
   const contact = { ...(currentState.data.contact as Record<string, string>) };
 
-  // If skipping the last field, go to confirmation
-  if (fieldConfig.nextState === 'confirm') {
-    await showConfirmation(chatId, telegramUserId, {
-      ...currentState.data,
-      contact,
-    });
-    return;
-  }
-
-  // Move to next field
-  const nextField = FIELD_FLOW.find((f) => f.state === fieldConfig.nextState);
-  if (!nextField) return;
-
-  await setState(telegramUserId, nextField.state, {
-    ...currentState.data,
-    contact,
-  });
-
-  const options: { reply_markup?: object } = {};
-  if (!nextField.required) {
-    options.reply_markup = {
-      inline_keyboard: [[{ text: '⏭ Skip', callback_data: 'skip' }]],
-    };
-  }
-
-  await sendMessage(chatId, nextField.prompt, options);
+  await goToNextField(chatId, telegramUserId, { ...currentState.data, contact }, currentIndex);
 }
 
 // --- Confirmation & Save ---
