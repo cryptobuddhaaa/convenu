@@ -15,6 +15,7 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const WEBAPP_URL = process.env.WEBAPP_URL || 'https://shareable-itinerary.vercel.app';
 
 // Webhook secret derived from bot token
 const WEBHOOK_SECRET = crypto
@@ -120,17 +121,28 @@ async function handleStart(
         chatId,
         '👋 Welcome back! Your account is linked.\n\n' +
           'Use /add to add a new contact.\n' +
-          'Use /help for all commands.'
+          'Use /help for all commands.',
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+            ],
+          },
+        }
       );
     } else {
       await sendMessage(
         chatId,
         '👋 Welcome to Itinerary Contact Bot!\n\n' +
-          'To get started, link your web app account:\n' +
-          '1. Go to your web app → Contacts → Link Telegram\n' +
-          '2. Click the link button to get a code\n' +
-          '3. The link will open this bot and connect automatically\n\n' +
-          'Use /help for all commands.'
+          'Tap <b>Open App</b> below to get started, or link an existing account from the web app.\n\n' +
+          'Use /help for all commands.',
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+            ],
+          },
+        }
       );
     }
     return;
@@ -594,7 +606,14 @@ async function handleConfirmation(
     `✅ Contact saved!\n\n` +
       `<b>${displayName}</b>${company}\n` +
       `→ ${eventTitle}\n\n` +
-      'Use /add to add another contact.'
+      'Use /add to add another contact.',
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+        ],
+      },
+    }
   );
 }
 
@@ -634,7 +653,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           '<b>Available commands:</b>\n\n' +
             '/add — Add a new contact\n' +
             '/cancel — Cancel current operation\n' +
-            '/help — Show this help message'
+            '/help — Show this help message',
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+              ],
+            },
+          }
         );
       } else {
         // Regular text — handle based on conversation state
