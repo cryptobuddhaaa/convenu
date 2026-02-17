@@ -131,9 +131,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       userEmail = existingUser.user.email || `tg_${telegramUserId}@${TG_EMAIL_DOMAIN}`;
     } else {
-      // 3. New Telegram user — create a Supabase account
+      // 3. No link found — either new user or previously unlinked
       const syntheticEmail = `tg_${telegramUserId}@${TG_EMAIL_DOMAIN}`;
 
+      // Try to create a new user
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
         email: syntheticEmail,
         email_confirm: true,
@@ -148,15 +149,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       });
 
-      if (createError || !newUser?.user) {
-        console.error('Error creating user:', createError);
+      if (createError) {
+        // User already exists (e.g. previously unlinked) — look them up by email
+        const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
+        const existingUser = listData?.users?.find((u) => u.email === syntheticEmail);
+
+        if (listError || !existingUser) {
+          console.error('Error finding existing user:', listError || 'User not found');
+          return res.status(500).json({ error: 'Failed to create or find user account' });
+        }
+
+        userId = existingUser.id;
+        userEmail = syntheticEmail;
+      } else if (!newUser?.user) {
         return res.status(500).json({ error: 'Failed to create user account' });
+      } else {
+        userId = newUser.user.id;
+        userEmail = syntheticEmail;
       }
 
-      userId = newUser.user.id;
-      userEmail = syntheticEmail;
-
-      // 4. Create the telegram_links entry
+      // 4. Re-create the telegram_links entry
       await supabase.from('telegram_links').upsert({
         telegram_user_id: telegramUserId,
         user_id: userId,

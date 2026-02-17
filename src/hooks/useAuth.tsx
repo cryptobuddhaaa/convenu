@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean;
   isTelegramMiniApp: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithTelegram: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   isTelegramMiniApp: false,
   signInWithGoogle: async () => {},
+  signInWithTelegram: async () => {},
   signOut: async () => {},
 });
 
@@ -155,6 +157,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithTelegram = async () => {
+    const initData = getTelegramInitData();
+    if (!initData) {
+      toast.error('Telegram data not available. Please open the app from Telegram.');
+      return;
+    }
+
+    setLoading(true);
+    telegramAuthInProgress.current = true;
+
+    try {
+      console.log('[Auth] Manual Telegram sign-in, calling /api/auth/telegram...');
+      const response = await fetch('/api/auth/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        console.error('[Auth] Telegram auth failed:', errData);
+        toast.error('Telegram authentication failed');
+        telegramAuthInProgress.current = false;
+        setLoading(false);
+        return;
+      }
+
+      const { token_hash } = await response.json();
+      console.log('[Auth] Got token_hash, verifying OTP...');
+
+      const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
+        token_hash,
+        type: 'magiclink',
+      });
+
+      telegramAuthInProgress.current = false;
+
+      if (otpError) {
+        console.error('[Auth] OTP verification failed:', otpError);
+        toast.error('Failed to establish session');
+      } else {
+        console.log('[Auth] Telegram sign-in succeeded, user:', otpData?.user?.id);
+        if (otpData?.session) {
+          setSession(otpData.session);
+          setUser(otpData.session.user);
+        }
+      }
+    } catch (err) {
+      console.error('[Auth] Telegram auth error:', err);
+      toast.error('Telegram authentication failed');
+      telegramAuthInProgress.current = false;
+    }
+
+    setLoading(false);
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -177,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     isTelegramMiniApp,
     signInWithGoogle,
+    signInWithTelegram,
     signOut,
   };
 
