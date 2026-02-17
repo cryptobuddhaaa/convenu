@@ -390,27 +390,27 @@ export function AIAssistantModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="relative w-full max-w-2xl bg-white rounded-lg shadow-xl flex flex-col max-h-[80vh]">
+      <div className="relative w-full max-w-2xl bg-slate-800 rounded-lg shadow-xl flex flex-col max-h-[80vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-purple-600" />
-            <h2 className="text-xl font-semibold text-gray-900">AI Assistant</h2>
+            <Sparkles className="w-5 h-5 text-purple-400" />
+            <h2 className="text-xl font-semibold text-white">AI Assistant</h2>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-slate-400">
               {usageInfo.remaining}/{usageInfo.limit} queries remaining
             </div>
             <button
               onClick={handleClearConversation}
-              className="text-xs text-gray-500 hover:text-gray-700 transition-colors px-2 py-1 rounded hover:bg-gray-100"
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors px-2 py-1 rounded hover:bg-slate-700"
               title="Clear conversation history"
             >
               Clear
             </button>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-slate-400 hover:text-slate-200 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -428,7 +428,7 @@ export function AIAssistantModal({
                 className={`max-w-[80%] rounded-lg px-4 py-2 ${
                   msg.role === 'user'
                     ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                    : 'bg-slate-700 text-slate-200'
                 }`}
               >
                 <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
@@ -444,8 +444,8 @@ export function AIAssistantModal({
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg px-4 py-2">
-                <Loader2 className="w-4 h-4 animate-spin text-gray-600" />
+              <div className="bg-slate-700 rounded-lg px-4 py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
               </div>
             </div>
           )}
@@ -455,14 +455,14 @@ export function AIAssistantModal({
 
         {/* Event Confirmation */}
         {suggestedEvent && (
-          <div className={`px-6 py-4 border-t ${suggestedEvent._deleteAction ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-200'}`}>
+          <div className={`px-6 py-4 border-t ${suggestedEvent._deleteAction ? 'bg-red-900/30 border-red-700' : 'bg-purple-900/30 border-purple-700'}`}>
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900 mb-2">
+                <p className="text-sm font-medium text-white mb-2">
                   {suggestedEvent._deleteAction ? 'Confirm Deletion:' : 'Confirm Event:'}
                 </p>
                 {suggestedEvent._deleteAction ? (
-                  <div className="space-y-1 text-sm text-gray-700">
+                  <div className="space-y-1 text-sm text-slate-300">
                     <p><strong>Event:</strong> {suggestedEvent.eventTitle}</p>
                     {suggestedEvent.eventDate && (
                       <p><strong>Date:</strong> {new Date(suggestedEvent.eventDate).toLocaleDateString()}</p>
@@ -471,13 +471,13 @@ export function AIAssistantModal({
                       <p><strong>Time:</strong> {suggestedEvent.eventTime}</p>
                     )}
                     {suggestedEvent.hasContacts && (
-                      <p className="text-red-600 font-medium mt-2">
+                      <p className="text-red-400 font-medium mt-2">
                         ⚠️ {suggestedEvent.contactCount ?? 0} contact{(suggestedEvent.contactCount ?? 0) > 1 ? 's' : ''} will also be deleted
                       </p>
                     )}
                   </div>
                 ) : (
-                  <div className="space-y-1 text-sm text-gray-700">
+                  <div className="space-y-1 text-sm text-slate-300">
                     <p><strong>Title:</strong> {suggestedEvent.title}</p>
                     <p>
                       <strong>Time:</strong>{' '}
@@ -504,7 +504,7 @@ export function AIAssistantModal({
                 </button>
                 <button
                   onClick={handleCancelEvent}
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 bg-slate-700 border border-slate-600 text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-600 transition-colors"
                 >
                   Cancel
                 </button>
@@ -515,8 +515,8 @@ export function AIAssistantModal({
 
         {/* Error */}
         {error && (
-          <div className="px-6 py-3 bg-red-50 border-t border-red-200">
-            <div className="flex items-center gap-2 text-sm text-red-700">
+          <div className="px-6 py-3 bg-red-900/30 border-t border-red-700">
+            <div className="flex items-center gap-2 text-sm text-red-300">
               <AlertCircle className="w-4 h-4" />
               <p>{error}</p>
             </div>
@@ -524,7 +524,7 @@ export function AIAssistantModal({
         )}
 
         {/* Input */}
-        <div className="px-6 py-4 border-t border-gray-200">
+        <div className="px-6 py-4 border-t border-slate-700">
           <div className="flex gap-2">
             <textarea
               ref={inputRef}
@@ -532,7 +532,7 @@ export function AIAssistantModal({
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Type your message... (e.g., 'Add flight at 8am tomorrow')"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="flex-1 px-4 py-2 border border-slate-600 rounded-lg resize-none bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               rows={2}
               disabled={isLoading}
             />
@@ -548,7 +548,7 @@ export function AIAssistantModal({
               )}
             </button>
           </div>
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-slate-500 mt-2">
             Press Enter to send, Shift+Enter for new line
           </p>
         </div>

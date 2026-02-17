@@ -163,7 +163,7 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       {!isConnected ? (
         <button
           onClick={handleConnect}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-slate-700 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors shadow-sm"
         >
           <Calendar className="w-4 h-4" />
           Connect Google Calendar
@@ -186,13 +186,13 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
 
             <button
               onClick={handleDisconnect}
-              className="text-sm text-gray-600 hover:text-gray-800 underline"
+              className="text-sm text-slate-400 hover:text-slate-200 underline"
             >
               Disconnect
             </button>
 
             {isConnected && !showPreview && (
-              <div className="flex items-center gap-2 text-sm text-green-600">
+              <div className="flex items-center gap-2 text-sm text-green-400">
                 <CheckCircle className="w-4 h-4" />
                 Connected
               </div>
@@ -200,7 +200,7 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
           </div>
 
           {error && (
-            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <div className="flex items-start gap-2 p-3 bg-red-900/30 border border-red-700 rounded-lg text-sm text-red-300">
               <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
               <pre className="whitespace-pre-wrap font-sans flex-1">{error}</pre>
             </div>
@@ -211,13 +211,13 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       {/* Event Preview Modal */}
       {showPreview && lumaEvents.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+          <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
+            <div className="px-6 py-4 border-b border-slate-700">
+              <h2 className="text-xl font-semibold text-white">
                 Import Luma Events ({selectedEvents.size} selected)
               </h2>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-slate-400 mt-1">
                 Found {lumaEvents.length} Luma event{lumaEvents.length !== 1 ? 's' : ''} in your calendar
               </p>
             </div>
@@ -231,8 +231,8 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
                     onClick={() => toggleEventSelection(event.id)}
                     className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
                       selectedEvents.has(event.id)
-                        ? 'border-purple-500 bg-purple-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'border-purple-500 bg-purple-900/30'
+                        : 'border-slate-700 bg-slate-800 hover:border-slate-600'
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -244,8 +244,8 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
                         onClick={(e) => e.stopPropagation()}
                       />
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-gray-900">{event.summary}</h3>
-                        <div className="mt-1 space-y-1 text-sm text-gray-600">
+                        <h3 className="font-medium text-white">{event.summary}</h3>
+                        <div className="mt-1 space-y-1 text-sm text-slate-400">
                           <p>
                             📅 {new Date(event.start.dateTime || event.start.date!).toLocaleString('en-US', {
                               weekday: 'short',
@@ -265,13 +265,13 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-slate-700 flex justify-end gap-3">
               <button
                 onClick={() => {
                   setShowPreview(false);
                   setSelectedEvents(new Set());
                 }}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-700 transition-colors"
               >
                 Cancel
               </button>

@@ -48,23 +48,23 @@ export function ConfirmDialog({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90] p-4" onClick={onCancel}>
       <div
-        className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+        className="bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6"
         onClick={(e) => e.stopPropagation()}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-message"
       >
-        <h3 id="confirm-dialog-title" className="text-lg font-semibold text-gray-900 mb-2">
+        <h3 id="confirm-dialog-title" className="text-lg font-semibold text-white mb-2">
           {title}
         </h3>
-        <p id="confirm-dialog-message" className="text-sm text-gray-600 mb-6">
+        <p id="confirm-dialog-message" className="text-sm text-slate-300 mb-6">
           {message}
         </p>
         <div className="flex justify-end gap-3">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
           >
             {cancelLabel}
           </button>

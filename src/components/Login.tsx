@@ -4,24 +4,24 @@ export default function Login() {
   const { signInWithGoogle } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900">Itinerary Builder</h1>
-          <p className="mt-2 text-sm text-gray-600">Plan and share your trips with friends</p>
+          <h1 className="text-4xl font-bold text-white">Itinerary & Contact Manager</h1>
+          <p className="mt-2 text-sm text-slate-400">All in one trip planning and networking tool</p>
         </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+        <div className="bg-slate-800 py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <div>
-            <h2 className="text-2xl font-semibold text-gray-900 text-center mb-6">
+            <h2 className="text-2xl font-semibold text-white text-center mb-6">
               Sign in to continue
             </h2>
 
             <button
               onClick={signInWithGoogle}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-slate-600 rounded-lg shadow-sm bg-slate-700 text-sm font-medium text-white hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500 transition-colors"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path
@@ -47,17 +47,17 @@ export default function Login() {
             <div className="mt-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
+                  <div className="w-full border-t border-slate-600"></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">Why sign in?</span>
+                  <span className="px-2 bg-slate-800 text-slate-400">Why sign in?</span>
                 </div>
               </div>
 
-              <div className="mt-6 text-sm text-gray-600 space-y-2">
+              <div className="mt-6 text-sm text-slate-300 space-y-2">
                 <div className="flex items-start">
                   <svg
-                    className="w-5 h-5 text-green-500 mr-2 mt-0.5"
+                    className="w-5 h-5 text-green-400 mr-2 mt-0.5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -69,11 +69,11 @@ export default function Login() {
                       d="M5 13l4 4L19 7"
                     />
                   </svg>
-                  <span>Save your itineraries securely</span>
+                  <span>Save your trip plans and contacts securely</span>
                 </div>
                 <div className="flex items-start">
                   <svg
-                    className="w-5 h-5 text-green-500 mr-2 mt-0.5"
+                    className="w-5 h-5 text-green-400 mr-2 mt-0.5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -89,7 +89,7 @@ export default function Login() {
                 </div>
                 <div className="flex items-start">
                   <svg
-                    className="w-5 h-5 text-green-500 mr-2 mt-0.5"
+                    className="w-5 h-5 text-green-400 mr-2 mt-0.5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -101,14 +101,14 @@ export default function Login() {
                       d="M5 13l4 4L19 7"
                     />
                   </svg>
-                  <span>Share with friends privately</span>
+                  <span>Share itineraries and manage your network</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <p className="mt-4 text-center text-xs text-gray-500">
+        <p className="mt-4 text-center text-xs text-slate-500">
           By signing in, you agree to our Terms of Service and Privacy Policy
         </p>
       </div>

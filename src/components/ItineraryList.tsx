@@ -26,14 +26,14 @@ export default function ItineraryList() {
   };
 
   return (
-    <div className="bg-white shadow rounded-lg p-6 mb-6">
+    <div className="bg-slate-800 shadow rounded-lg p-6 mb-6">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between mb-4 hover:bg-gray-50 p-2 rounded-lg transition-colors"
+        className="w-full flex items-center justify-between mb-4 hover:bg-slate-700 p-2 rounded-lg transition-colors"
       >
-        <h2 className="text-lg font-semibold text-gray-900">My Itineraries</h2>
+        <h2 className="text-lg font-semibold text-white">My Itineraries</h2>
         <svg
-          className={`w-5 h-5 text-gray-600 transition-transform duration-200 ${
+          className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${
             isExpanded ? 'transform rotate-180' : ''
           }`}
           fill="none"
@@ -52,19 +52,19 @@ export default function ItineraryList() {
               key={itinerary.id}
               className={`flex items-center justify-between p-3 rounded-lg border-2 ${
                 isActive
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
+                  ? 'border-blue-500 bg-blue-900/30'
+                  : 'border-slate-700 bg-slate-800 hover:border-slate-600'
               }`}
             >
               <button
                 onClick={() => selectItinerary(itinerary.id)}
                 className="flex-1 text-left"
               >
-                <div className="font-medium text-gray-900">{itinerary.title}</div>
-                <div className="text-sm text-gray-600">
+                <div className="font-medium text-white">{itinerary.title}</div>
+                <div className="text-sm text-slate-300">
                   {itinerary.location} · {formatDate(itinerary.startDate)} - {formatDate(itinerary.endDate)}
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-slate-400 mt-1">
                   {itinerary.days.reduce((total, day) => total + day.events.length, 0)} events
                 </div>
               </button>
@@ -74,7 +74,7 @@ export default function ItineraryList() {
                     e.stopPropagation();
                     setEditItinerary(itinerary);
                   }}
-                  className="text-gray-600 hover:text-gray-800 p-2"
+                  className="text-slate-400 hover:text-slate-200 p-2"
                   title="Edit itinerary"
                   aria-label="Edit itinerary"
                 >
@@ -87,7 +87,7 @@ export default function ItineraryList() {
                     e.stopPropagation();
                     setShareItinerary(itinerary);
                   }}
-                  className="text-blue-600 hover:text-blue-800 p-2"
+                  className="text-blue-400 hover:text-blue-300 p-2"
                   title="Share itinerary"
                   aria-label="Share itinerary"
                 >
@@ -106,7 +106,7 @@ export default function ItineraryList() {
                     });
                     if (confirmed) deleteItinerary(itinerary.id);
                   }}
-                  className="text-red-600 hover:text-red-800 p-2"
+                  className="text-red-400 hover:text-red-300 p-2"
                   title="Delete itinerary"
                   aria-label="Delete itinerary"
                 >
