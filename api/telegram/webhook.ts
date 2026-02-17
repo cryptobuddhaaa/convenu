@@ -221,9 +221,11 @@ async function handleStart(
       await sendMessage(
         chatId,
         '👋 Welcome back! Your account is linked.\n\n' +
-          'Use /newcontact to add a new contact.\n' +
-          'Use /newitinerary to create a trip.\n' +
-          'Use /newevent to add an event.\n' +
+          'Use /newcontact to add a contact\n' +
+          'Use /newitinerary to create a trip\n' +
+          'Use /newevent to add an event\n' +
+          'Use /contacts to view contacts\n' +
+          'Forward a message to quick-add a contact\n\n' +
           'Use /help for all commands.',
         {
           reply_markup: {
@@ -1743,6 +1745,370 @@ async function handleEventEdit(
 }
 
 // ============================================================
+// FORWARD-TO-FILE (forward a message → auto-create contact)
+// ============================================================
+
+async function handleForwardedMessage(
+  chatId: number,
+  telegramUserId: number,
+  msg: Record<string, unknown>
+) {
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) {
+    await sendMessage(
+      chatId,
+      '❌ Your account is not linked yet.\n\n' +
+        'Go to your web app → Contacts → Link Telegram to get started.'
+    );
+    return;
+  }
+
+  // Extract sender info from forwarded message
+  const forwardFrom = msg.forward_from as { id?: number; first_name?: string; last_name?: string; username?: string } | undefined;
+  const forwardSenderName = msg.forward_sender_name as string | undefined;
+  const forwardDate = msg.forward_date as number | undefined;
+
+  let firstName = '';
+  let lastName = '';
+  let telegramHandle = '';
+
+  if (forwardFrom) {
+    firstName = forwardFrom.first_name || '';
+    lastName = forwardFrom.last_name || '';
+    if (forwardFrom.username) {
+      telegramHandle = `@${forwardFrom.username}`;
+    }
+  } else if (forwardSenderName) {
+    // Privacy-restricted user — only have display name
+    const parts = forwardSenderName.split(' ');
+    firstName = parts[0] || '';
+    lastName = parts.slice(1).join(' ') || '';
+  } else {
+    await sendMessage(
+      chatId,
+      '❌ Could not extract sender info from this message. Try forwarding a message from the contact.'
+    );
+    return;
+  }
+
+  if (!firstName) {
+    await sendMessage(chatId, '❌ Could not determine the sender\'s name.');
+    return;
+  }
+
+  // Try to match the forward date to an itinerary event
+  let matchedItineraryId: string | undefined;
+  let matchedEventId: string | undefined;
+  let matchedEventTitle: string | undefined;
+  let matchedEventDate: string | undefined;
+
+  if (forwardDate) {
+    const fwdDate = new Date(forwardDate * 1000);
+    const fwdDateStr = fwdDate.toISOString().split('T')[0];
+
+    // Fetch user's itineraries to find matching events
+    const { data: itineraries } = await supabase
+      .from('itineraries')
+      .select('id, title, start_date, end_date, data')
+      .eq('user_id', userId)
+      .order('start_date', { ascending: false })
+      .limit(10);
+
+    if (itineraries) {
+      for (const it of itineraries) {
+        if (fwdDateStr < it.start_date || fwdDateStr > it.end_date) continue;
+
+        const itData = it.data as { days?: Array<{ date: string; events?: Array<{ id: string; title: string; startTime: string }> }> };
+        for (const day of itData.days || []) {
+          if (day.date !== fwdDateStr) continue;
+          // Match to the event closest to the forward time, or the first event of that day
+          const events = day.events || [];
+          if (events.length > 0) {
+            // Find the event whose start time is closest to the forward time
+            let bestEvent = events[0];
+            let bestDiff = Infinity;
+            for (const ev of events) {
+              const evTime = new Date(ev.startTime).getTime();
+              const diff = Math.abs(fwdDate.getTime() - evTime);
+              if (diff < bestDiff) {
+                bestDiff = diff;
+                bestEvent = ev;
+              }
+            }
+            matchedItineraryId = it.id;
+            matchedEventId = bestEvent.id;
+            matchedEventTitle = bestEvent.title;
+            matchedEventDate = fwdDateStr;
+            break;
+          }
+        }
+        if (matchedEventId) break;
+      }
+    }
+  }
+
+  // Pre-fill and go straight to contact confirmation flow
+  const contact: Record<string, string> = {
+    telegramHandle: telegramHandle || '',
+    firstName,
+    lastName,
+  };
+
+  const stateData: Record<string, unknown> = { contact };
+  if (matchedItineraryId) stateData.itineraryId = matchedItineraryId;
+  if (matchedEventId) stateData.eventId = matchedEventId;
+  if (matchedEventTitle) stateData.eventTitle = matchedEventTitle;
+  if (matchedEventDate) stateData.eventDate = matchedEventDate;
+
+  // Show confirmation with pre-filled data
+  let summary = '<b>📋 Quick-add contact from forwarded message:</b>\n\n';
+  if (matchedEventTitle) {
+    summary += `📍 Matched event: <b>${matchedEventTitle}</b>\n`;
+    if (matchedEventDate) {
+      const fmtDate = new Date(matchedEventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      summary += `📅 ${fmtDate}\n`;
+    }
+    summary += '\n';
+  }
+  summary += `👤 Name: ${firstName}`;
+  if (lastName) summary += ` ${lastName}`;
+  summary += '\n';
+  if (telegramHandle) summary += `💬 Telegram: ${telegramHandle}\n`;
+  if (!telegramHandle) summary += '⚠️ No username available (privacy restricted)\n';
+
+  await setState(telegramUserId, 'confirm', stateData);
+
+  await sendMessage(chatId, summary, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '✅ Save Contact', callback_data: 'cf:yes' },
+          { text: '❌ Cancel', callback_data: 'cf:no' },
+        ],
+        [
+          { text: '✏️ First Name', callback_data: 'ed:1' },
+          { text: '✏️ Last Name', callback_data: 'ed:2' },
+        ],
+        [
+          { text: '✏️ Telegram', callback_data: 'ed:0' },
+          { text: '✏️ Company', callback_data: 'ed:3' },
+        ],
+      ],
+    },
+  });
+}
+
+// ============================================================
+// CONTACTS LIST & FOLLOW-UP (/contacts, /contacted)
+// ============================================================
+
+async function handleContacts(chatId: number, telegramUserId: number) {
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) {
+    await sendMessage(
+      chatId,
+      '❌ Your account is not linked yet.\n\n' +
+        'Go to your web app → Contacts → Link Telegram to get started.'
+    );
+    return;
+  }
+
+  // Fetch user's itineraries to let them pick
+  const { data: itineraries } = await supabase
+    .from('itineraries')
+    .select('id, title, location')
+    .eq('user_id', userId)
+    .order('start_date', { ascending: false })
+    .limit(10);
+
+  if (!itineraries || itineraries.length === 0) {
+    // No itineraries — show all contacts
+    await showContactsList(chatId, userId, undefined, 'All Contacts');
+    return;
+  }
+
+  // Build itinerary selection keyboard
+  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [
+    [{ text: '📋 All Contacts', callback_data: 'cl:all' }],
+  ];
+  for (const it of itineraries) {
+    keyboard.push([{
+      text: `${it.title} (${it.location})`,
+      callback_data: `cl:${it.id}`,
+    }]);
+  }
+
+  await sendMessage(chatId, '👥 <b>View contacts</b>\n\nSelect an itinerary or view all:', {
+    reply_markup: { inline_keyboard: keyboard },
+  });
+}
+
+async function handleContactsListSelection(
+  chatId: number,
+  telegramUserId: number,
+  selection: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) return;
+
+  if (selection === 'all') {
+    await showContactsList(chatId, userId, undefined, 'All Contacts');
+  } else {
+    // Fetch itinerary title
+    const { data: it } = await supabase
+      .from('itineraries')
+      .select('title')
+      .eq('id', selection)
+      .eq('user_id', userId)
+      .single();
+
+    await showContactsList(chatId, userId, selection, it?.title || 'Trip');
+  }
+}
+
+async function showContactsList(
+  chatId: number,
+  userId: string,
+  itineraryId: string | undefined,
+  label: string
+) {
+  let query = supabase
+    .from('contacts')
+    .select('first_name, last_name, telegram_handle, project_company, event_title, last_contacted_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (itineraryId) {
+    query = query.eq('itinerary_id', itineraryId);
+  }
+
+  const { data: contacts } = await query.limit(50);
+
+  if (!contacts || contacts.length === 0) {
+    await sendMessage(chatId, `📋 <b>${label}</b>\n\nNo contacts found.`);
+    return;
+  }
+
+  let message = `📋 <b>${label}</b> (${contacts.length} contact${contacts.length !== 1 ? 's' : ''})\n\n`;
+
+  for (const c of contacts) {
+    const name = `${c.first_name} ${c.last_name || ''}`.trim();
+    const company = c.project_company ? ` — ${c.project_company}` : '';
+    const handle = c.telegram_handle ? c.telegram_handle.replace('@', '') : '';
+
+    message += `👤 <b>${name}</b>${company}\n`;
+
+    if (handle) {
+      message += `    💬 <a href="tg://resolve?domain=${handle}">@${handle}</a>`;
+    }
+
+    if (c.last_contacted_at) {
+      const d = new Date(c.last_contacted_at);
+      const ago = getTimeAgo(d);
+      message += ` · 📅 ${ago}`;
+    }
+
+    message += '\n';
+
+    if (c.event_title) {
+      message += `    📍 ${c.event_title}\n`;
+    }
+
+    message += '\n';
+  }
+
+  message += 'Tap a username to open their DM.\n';
+  message += 'Use <code>/contacted @handle</code> to mark as contacted.';
+
+  await sendMessage(chatId, message, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+      ],
+    },
+  });
+}
+
+function getTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return '1 day ago';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+  }
+  const months = Math.floor(diffDays / 30);
+  return `${months} month${months !== 1 ? 's' : ''} ago`;
+}
+
+async function handleContacted(
+  chatId: number,
+  telegramUserId: number,
+  args: string
+) {
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) {
+    await sendMessage(
+      chatId,
+      '❌ Your account is not linked yet.\n\n' +
+        'Go to your web app → Contacts → Link Telegram to get started.'
+    );
+    return;
+  }
+
+  const handle = args.trim();
+  if (!handle) {
+    await sendMessage(
+      chatId,
+      '❌ Please provide a Telegram handle.\n\n' +
+        'Usage: <code>/contacted @handle</code>'
+    );
+    return;
+  }
+
+  // Normalize — ensure it starts with @
+  const normalized = handle.startsWith('@') ? handle : `@${handle}`;
+
+  // Find contacts with this handle
+  const { data: contacts, error } = await supabase
+    .from('contacts')
+    .select('id, first_name, last_name')
+    .eq('user_id', userId)
+    .eq('telegram_handle', normalized);
+
+  if (error || !contacts || contacts.length === 0) {
+    await sendMessage(
+      chatId,
+      `❌ No contacts found with handle <b>${normalized}</b>.`
+    );
+    return;
+  }
+
+  // Update last_contacted_at for all matching contacts
+  const now = new Date().toISOString();
+  await supabase
+    .from('contacts')
+    .update({ last_contacted_at: now })
+    .eq('user_id', userId)
+    .eq('telegram_handle', normalized);
+
+  const names = contacts.map((c) => `${c.first_name} ${c.last_name || ''}`.trim());
+  const nameList = names.length === 1 ? names[0] : names.join(', ');
+
+  await sendMessage(
+    chatId,
+    `✅ Marked <b>${nameList}</b> (${normalized}) as contacted just now.`
+  );
+}
+
+// ============================================================
 // MAIN TEXT INPUT ROUTER
 // ============================================================
 
@@ -1801,7 +2167,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const telegramUsername: string | undefined = msg.from.username;
       const text: string = msg.text || '';
 
-      if (text.startsWith('/start')) {
+      // Check for forwarded messages first — auto-create contact from sender
+      if (msg.forward_from || msg.forward_sender_name) {
+        await handleForwardedMessage(chatId, telegramUserId, msg);
+      } else if (text.startsWith('/start')) {
         const args = text.substring('/start'.length).trim();
         await handleStart(chatId, telegramUserId, telegramUsername, args);
       } else if (text === '/newcontact') {
@@ -1810,6 +2179,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await handleNewItinerary(chatId, telegramUserId);
       } else if (text === '/newevent') {
         await handleNewEvent(chatId, telegramUserId);
+      } else if (text === '/contacts') {
+        await handleContacts(chatId, telegramUserId);
+      } else if (text.startsWith('/contacted')) {
+        const args = text.substring('/contacted'.length).trim();
+        await handleContacted(chatId, telegramUserId, args);
       } else if (text === '/cancel') {
         await clearState(telegramUserId);
         await sendMessage(chatId, '❌ Cancelled. Use /help for commands.');
@@ -1817,11 +2191,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await sendMessage(
           chatId,
           '<b>Available commands:</b>\n\n' +
+            '📋 <b>Create</b>\n' +
             '/newitinerary — Create a new trip\n' +
             '/newevent — Add an event to a trip\n' +
-            '/newcontact — Add a new contact\n' +
-            '/cancel — Cancel current operation\n' +
-            '/help — Show this help message',
+            '/newcontact — Add a new contact\n\n' +
+            '👥 <b>Contacts</b>\n' +
+            '/contacts — View your contacts with DM links\n' +
+            '/contacted @handle — Mark a contact as reached out\n\n' +
+            '💡 <b>Tips</b>\n' +
+            '• Forward a message from someone to quickly add them as a contact\n' +
+            '• Paste Luma links during event creation to auto-import\n\n' +
+            '/cancel — Cancel current operation',
           {
             reply_markup: {
               inline_keyboard: [
@@ -1874,6 +2254,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (data.startsWith('xe:')) {
         const fieldIndex = parseInt(data.substring(3), 10);
         await handleEventEdit(chatId, telegramUserId, fieldIndex, cq.id);
+      }
+      // --- Contacts list callbacks ---
+      else if (data.startsWith('cl:')) {
+        await handleContactsListSelection(chatId, telegramUserId, data.substring(3), cq.id);
       }
     }
 

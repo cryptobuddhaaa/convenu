@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useContacts } from '../hooks/useContacts';
 import ContactsList from './ContactsList';
 import ContactForm from './ContactForm';
+import InviteDialog from './InviteDialog';
 import { toast } from './Toast';
 import {
   generateTelegramLinkCode,
@@ -9,7 +10,7 @@ import {
   unlinkTelegram,
 } from '../services/telegramService';
 
-type SortOption = 'dateMet' | 'firstName' | 'lastName';
+type SortOption = 'dateMet' | 'firstName' | 'lastName' | 'lastContacted';
 
 export default function ContactsPage() {
   const { contacts } = useContacts();
@@ -19,6 +20,7 @@ export default function ContactsPage() {
   const [telegramUsername, setTelegramUsername] = useState<string>();
   const [linkLoading, setLinkLoading] = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
 
   useEffect(() => {
     getTelegramLinkStatus().then((status) => {
@@ -74,7 +76,13 @@ export default function ContactsPage() {
     result.sort((a, b) => {
       switch (sortBy) {
         case 'dateMet':
-          return (new Date(b.dateMet || 0).getTime()) - (new Date(a.dateMet || 0).getTime()); // Most recent first
+          return (new Date(b.dateMet || 0).getTime()) - (new Date(a.dateMet || 0).getTime());
+        case 'lastContacted':
+          // Contacts never contacted go to the bottom
+          if (!a.lastContactedAt && !b.lastContactedAt) return 0;
+          if (!a.lastContactedAt) return 1;
+          if (!b.lastContactedAt) return -1;
+          return new Date(b.lastContactedAt).getTime() - new Date(a.lastContactedAt).getTime();
         case 'firstName':
           return a.firstName.localeCompare(b.firstName);
         case 'lastName':
@@ -166,15 +174,26 @@ export default function ContactsPage() {
             Add Contact
           </button>
           {contacts.length > 0 && (
-            <button
-              onClick={exportToCSV}
-              className="inline-flex items-center px-4 py-2 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-700 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-blue-500"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Export CSV
-            </button>
+            <>
+              <button
+                onClick={() => setShowInvite(true)}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-green-500"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                Invite
+              </button>
+              <button
+                onClick={exportToCSV}
+                className="inline-flex items-center px-4 py-2 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-700 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-blue-500"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export CSV
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -252,6 +271,7 @@ export default function ContactsPage() {
               className="block w-full px-3 py-2 border border-slate-600 rounded-md leading-5 bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="dateMet">Sort by Date Met</option>
+              <option value="lastContacted">Sort by Last Contacted</option>
               <option value="firstName">Sort by First Name</option>
               <option value="lastName">Sort by Last Name</option>
             </select>
@@ -273,6 +293,10 @@ export default function ContactsPage() {
 
       {showAddContact && (
         <ContactForm onClose={() => setShowAddContact(false)} />
+      )}
+
+      {showInvite && (
+        <InviteDialog onClose={() => setShowInvite(false)} />
       )}
     </div>
   );

@@ -89,6 +89,7 @@ export interface Contact {
   eventTitle?: string; // Denormalized from event for easier display
   lumaEventUrl?: string; // Luma URL from the event (denormalized)
   dateMet?: string; // ISO8601 date
+  lastContactedAt?: string; // ISO8601 datetime — when user last reached out
   createdAt: string; // ISO8601 datetime
   updatedAt: string; // ISO8601 datetime
 }

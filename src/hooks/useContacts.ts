@@ -52,6 +52,7 @@ function mapRowToContact(row: Record<string, unknown>): Contact {
     eventTitle: (row.event_title as string) || undefined,
     lumaEventUrl: row.luma_event_url as string | undefined,
     dateMet: (row.date_met as string) || undefined,
+    lastContactedAt: (row.last_contacted_at as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -161,6 +162,7 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       if (updates.eventTitle !== undefined) updateData.event_title = updates.eventTitle || null;
       if (updates.dateMet !== undefined) updateData.date_met = updates.dateMet || null;
       if (updates.lumaEventUrl !== undefined) updateData.luma_event_url = updates.lumaEventUrl || null;
+      if (updates.lastContactedAt !== undefined) updateData.last_contacted_at = updates.lastContactedAt || null;
 
       const { data, error } = await supabase
         .from('contacts')

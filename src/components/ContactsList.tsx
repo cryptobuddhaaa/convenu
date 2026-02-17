@@ -6,15 +6,40 @@ import type { Contact } from '../models/types';
 import { toast } from './Toast';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 
+function getTimeAgo(dateStr: string): string {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return '1 day ago';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+  }
+  const months = Math.floor(diffDays / 30);
+  return `${months} month${months !== 1 ? 's' : ''} ago`;
+}
+
 interface ContactsListProps {
   itineraryId?: string; // If provided, filter contacts by itinerary
   contacts?: Contact[]; // If provided, use these contacts instead of fetching from hook
 }
 
 export default function ContactsList({ itineraryId, contacts: providedContacts }: ContactsListProps) {
-  const { contacts, getContactsByItinerary, deleteContact } = useContacts();
+  const { contacts, getContactsByItinerary, deleteContact, updateContact } = useContacts();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const { confirm, dialogProps } = useConfirmDialog();
+
+  const handleMarkContacted = async (contact: Contact) => {
+    try {
+      await updateContact(contact.id, { lastContactedAt: new Date().toISOString() });
+      toast.info(`Marked ${contact.firstName} as contacted`);
+    } catch {
+      toast.error('Failed to update contact.');
+    }
+  };
 
   const displayContacts = providedContacts
     ? providedContacts
@@ -93,6 +118,21 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                 )}
               </div>
               <div className="flex gap-1">
+                <button
+                  onClick={() => handleMarkContacted(contact)}
+                  className="text-green-400 hover:text-green-300 p-1"
+                  title="Mark as contacted"
+                  aria-label="Mark as contacted"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </button>
                 <button
                   onClick={() => setEditingContact(contact)}
                   className="text-blue-400 hover:text-blue-300 p-1"
@@ -178,6 +218,15 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
               {contact.notes && (
                 <div className="mt-2 text-sm text-slate-400 italic">
                   "{contact.notes}"
+                </div>
+              )}
+
+              {contact.lastContactedAt && (
+                <div className="flex items-center mt-2 text-xs text-green-400">
+                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Contacted {getTimeAgo(contact.lastContactedAt)}
                 </div>
               )}
             </div>
