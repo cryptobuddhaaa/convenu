@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useContacts } from '../hooks/useContacts';
 import ContactsList from './ContactsList';
+import ContactForm from './ContactForm';
 import { toast } from './Toast';
 import {
   generateTelegramLinkCode,
@@ -17,6 +18,7 @@ export default function ContactsPage() {
   const [telegramLinked, setTelegramLinked] = useState(false);
   const [telegramUsername, setTelegramUsername] = useState<string>();
   const [linkLoading, setLinkLoading] = useState(false);
+  const [showAddContact, setShowAddContact] = useState(false);
 
   useEffect(() => {
     getTelegramLinkStatus().then((status) => {
@@ -62,7 +64,7 @@ export default function ContactsPage() {
           contact.lastName.toLowerCase().includes(query) ||
           contact.projectCompany?.toLowerCase().includes(query) ||
           contact.position?.toLowerCase().includes(query) ||
-          contact.eventTitle.toLowerCase().includes(query) ||
+          contact.eventTitle?.toLowerCase().includes(query) ||
           contact.email?.toLowerCase().includes(query) ||
           contact.telegramHandle?.toLowerCase().includes(query)
       );
@@ -72,7 +74,7 @@ export default function ContactsPage() {
     result.sort((a, b) => {
       switch (sortBy) {
         case 'dateMet':
-          return new Date(b.dateMet).getTime() - new Date(a.dateMet).getTime(); // Most recent first
+          return (new Date(b.dateMet || 0).getTime()) - (new Date(a.dateMet || 0).getTime()); // Most recent first
         case 'firstName':
           return a.firstName.localeCompare(b.firstName);
         case 'lastName':
@@ -113,8 +115,8 @@ export default function ContactsPage() {
       contact.telegramHandle || '',
       contact.email || '',
       contact.notes || '',
-      contact.eventTitle,
-      contact.dateMet,
+      contact.eventTitle || '',
+      contact.dateMet || '',
     ]);
 
     // Combine headers and rows
@@ -153,17 +155,28 @@ export default function ContactsPage() {
             People you've met at events across all your itineraries
           </p>
         </div>
-        {contacts.length > 0 && (
+        <div className="flex gap-2">
           <button
-            onClick={exportToCSV}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            onClick={() => setShowAddContact(true)}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Export to CSV
+            Add Contact
           </button>
-        )}
+          {contacts.length > 0 && (
+            <button
+              onClick={exportToCSV}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Telegram Bot Link */}
@@ -257,6 +270,10 @@ export default function ContactsPage() {
       )}
 
       <ContactsList contacts={filteredAndSortedContacts} />
+
+      {showAddContact && (
+        <ContactForm onClose={() => setShowAddContact(false)} />
+      )}
     </div>
   );
 }

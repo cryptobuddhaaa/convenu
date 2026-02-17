@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { z } from 'zod';
 import { useContacts } from '../hooks/useContacts';
+import { useItinerary } from '../hooks/useItinerary';
 import { CreateContactSchema } from '../lib/validation';
-import type { Contact } from '../models/types';
+import type { Contact, ItineraryEvent } from '../models/types';
 
 interface EditContactDialogProps {
   contact: Contact;
@@ -11,6 +12,7 @@ interface EditContactDialogProps {
 
 export default function EditContactDialog({ contact, onClose }: EditContactDialogProps) {
   const { updateContact } = useContacts();
+  const { itineraries } = useItinerary();
   const [firstName, setFirstName] = useState(contact.firstName);
   const [lastName, setLastName] = useState(contact.lastName);
   const [projectCompany, setProjectCompany] = useState(contact.projectCompany || '');
@@ -21,6 +23,20 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
   const [notes, setNotes] = useState(contact.notes || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showLinkEvent, setShowLinkEvent] = useState(false);
+  const [selectedItineraryId, setSelectedItineraryId] = useState(contact.itineraryId || '');
+  const [selectedEventId, setSelectedEventId] = useState(contact.eventId || '');
+
+  // Get events for the selected itinerary
+  const selectedItinerary = itineraries.find((it) => it.id === selectedItineraryId);
+  const availableEvents: (ItineraryEvent & { dayDate: string })[] = [];
+  if (selectedItinerary) {
+    for (const day of selectedItinerary.days) {
+      for (const event of day.events) {
+        availableEvents.push({ ...event, dayDate: day.date });
+      }
+    }
+  }
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -49,7 +65,7 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
         notes: notes || undefined,
       });
 
-      await updateContact(contact.id, {
+      const updates: Partial<Contact> = {
         firstName: validated.firstName,
         lastName: validated.lastName,
         projectCompany: validated.projectCompany,
@@ -58,7 +74,28 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
         email: validated.email,
         linkedin: validated.linkedin,
         notes: validated.notes,
-      });
+      };
+
+      // Include event linking updates if changed
+      if (selectedEventId && selectedEventId !== contact.eventId) {
+        const linkedEvent = availableEvents.find((e) => e.id === selectedEventId);
+        if (linkedEvent) {
+          updates.itineraryId = selectedItineraryId;
+          updates.eventId = selectedEventId;
+          updates.eventTitle = linkedEvent.title;
+          updates.dateMet = linkedEvent.dayDate;
+          updates.lumaEventUrl = linkedEvent.lumaEventUrl;
+        }
+      } else if (!selectedEventId && contact.eventId) {
+        // Unlink event
+        updates.itineraryId = undefined;
+        updates.eventId = undefined;
+        updates.eventTitle = undefined;
+        updates.dateMet = undefined;
+        updates.lumaEventUrl = undefined;
+      }
+
+      await updateContact(contact.id, updates);
 
       onClose();
     } catch (error) {
@@ -85,10 +122,14 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
           <div className="flex justify-between items-start mb-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Edit Contact</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                From: <span className="font-medium">{contact.eventTitle}</span>
-              </p>
-              <p className="text-sm text-gray-500">{formatDate(contact.dateMet)}</p>
+              {contact.eventTitle ? (
+                <p className="text-sm text-gray-600 mt-1">
+                  From: <span className="font-medium">{contact.eventTitle}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500 mt-1">Standalone contact</p>
+              )}
+              {contact.dateMet && <p className="text-sm text-gray-500">{formatDate(contact.dateMet)}</p>}
             </div>
             <button
               onClick={onClose}
@@ -254,6 +295,59 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
                 placeholder="Any additional notes about this contact..."
               />
               {errors.notes && <p className="mt-1 text-sm text-red-600">{errors.notes}</p>}
+            </div>
+
+            {/* Link to Event section */}
+            <div className="border-t border-gray-200 pt-4">
+              {!showLinkEvent && !contact.eventId ? (
+                <button
+                  type="button"
+                  onClick={() => setShowLinkEvent(true)}
+                  className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Link to an event
+                </button>
+              ) : showLinkEvent || contact.eventId ? (
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Linked Event
+                  </label>
+                  <select
+                    value={selectedItineraryId}
+                    onChange={(e) => {
+                      setSelectedItineraryId(e.target.value);
+                      setSelectedEventId('');
+                    }}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={isSubmitting}
+                  >
+                    <option value="">No itinerary</option>
+                    {itineraries.map((it) => (
+                      <option key={it.id} value={it.id}>
+                        {it.title} ({it.location})
+                      </option>
+                    ))}
+                  </select>
+                  {selectedItineraryId && availableEvents.length > 0 && (
+                    <select
+                      value={selectedEventId}
+                      onChange={(e) => setSelectedEventId(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isSubmitting}
+                    >
+                      <option value="">No event</option>
+                      {availableEvents.map((ev) => (
+                        <option key={ev.id} value={ev.id}>
+                          {new Date(ev.dayDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — {ev.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">

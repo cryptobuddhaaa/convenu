@@ -4,11 +4,11 @@ import { useContacts } from '../hooks/useContacts';
 import { CreateContactSchema } from '../lib/validation';
 
 interface ContactFormProps {
-  itineraryId: string;
-  eventId: string;
-  eventTitle: string;
+  itineraryId?: string;
+  eventId?: string;
+  eventTitle?: string;
   lumaEventUrl?: string;
-  dateMet: string;
+  dateMet?: string;
   onClose: () => void;
 }
 
@@ -103,10 +103,14 @@ export default function ContactForm({
           <div className="flex justify-between items-start mb-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Add Contact</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                From: <span className="font-medium">{eventTitle}</span>
-              </p>
-              <p className="text-sm text-gray-500">{formatDate(dateMet)}</p>
+              {eventTitle ? (
+                <p className="text-sm text-gray-600 mt-1">
+                  From: <span className="font-medium">{eventTitle}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500 mt-1">Standalone contact</p>
+              )}
+              {dateMet && <p className="text-sm text-gray-500">{formatDate(dateMet)}</p>}
             </div>
             <button
               onClick={onClose}

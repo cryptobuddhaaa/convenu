@@ -14,11 +14,11 @@ interface ContactsState {
   // Actions
   initialize: (userId: string) => Promise<void>;
   addContact: (contactData: {
-    itineraryId: string;
-    eventId: string;
-    eventTitle: string;
+    itineraryId?: string;
+    eventId?: string;
+    eventTitle?: string;
     lumaEventUrl?: string;
-    dateMet: string;
+    dateMet?: string;
     firstName: string;
     lastName: string;
     projectCompany?: string;
@@ -38,8 +38,8 @@ interface ContactsState {
 function mapRowToContact(row: Record<string, unknown>): Contact {
   return {
     id: row.id as string,
-    itineraryId: row.itinerary_id as string,
-    eventId: row.event_id as string,
+    itineraryId: (row.itinerary_id as string) || undefined,
+    eventId: (row.event_id as string) || undefined,
     userId: row.user_id as string,
     firstName: row.first_name as string,
     lastName: row.last_name as string,
@@ -49,9 +49,9 @@ function mapRowToContact(row: Record<string, unknown>): Contact {
     email: row.email as string | undefined,
     linkedin: row.linkedin as string | undefined,
     notes: row.notes as string | undefined,
-    eventTitle: row.event_title as string,
+    eventTitle: (row.event_title as string) || undefined,
     lumaEventUrl: row.luma_event_url as string | undefined,
-    dateMet: row.date_met as string,
+    dateMet: (row.date_met as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -111,8 +111,8 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       const { data, error } = await supabase
         .from('contacts')
         .insert({
-          itinerary_id: contactData.itineraryId,
-          event_id: contactData.eventId,
+          itinerary_id: contactData.itineraryId || null,
+          event_id: contactData.eventId || null,
           user_id: user.id,
           first_name: contactData.firstName,
           last_name: contactData.lastName,
@@ -122,9 +122,9 @@ export const useContacts = create<ContactsState>()((set, get) => ({
           email: contactData.email,
           linkedin: contactData.linkedin,
           notes: contactData.notes,
-          event_title: contactData.eventTitle,
+          event_title: contactData.eventTitle || null,
           luma_event_url: contactData.lumaEventUrl,
-          date_met: contactData.dateMet,
+          date_met: contactData.dateMet || null,
         })
         .select()
         .single();
@@ -156,6 +156,11 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       if (updates.email !== undefined) updateData.email = updates.email;
       if (updates.linkedin !== undefined) updateData.linkedin = updates.linkedin;
       if (updates.notes !== undefined) updateData.notes = updates.notes;
+      if (updates.itineraryId !== undefined) updateData.itinerary_id = updates.itineraryId || null;
+      if (updates.eventId !== undefined) updateData.event_id = updates.eventId || null;
+      if (updates.eventTitle !== undefined) updateData.event_title = updates.eventTitle || null;
+      if (updates.dateMet !== undefined) updateData.date_met = updates.dateMet || null;
+      if (updates.lumaEventUrl !== undefined) updateData.luma_event_url = updates.lumaEventUrl || null;
 
       const { data, error } = await supabase
         .from('contacts')

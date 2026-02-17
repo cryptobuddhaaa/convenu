@@ -203,24 +203,23 @@ async function handleAdd(chatId: number, telegramUserId: number) {
     .order('start_date', { ascending: false })
     .limit(10);
 
-  if (!itineraries || itineraries.length === 0) {
-    await sendMessage(
-      chatId,
-      "📋 You don't have any itineraries yet. Create one in the web app first."
-    );
-    return;
+  // Build inline keyboard with itineraries + skip option
+  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (itineraries && itineraries.length > 0) {
+    for (const it of itineraries) {
+      keyboard.push([{
+        text: `${it.title} (${it.location})`,
+        callback_data: `it:${it.id}`,
+      }]);
+    }
   }
 
-  // Build inline keyboard with itineraries
-  const keyboard = itineraries.map((it) => [
-    {
-      text: `${it.title} (${it.location})`,
-      callback_data: `it:${it.id}`,
-    },
-  ]);
+  // Always offer the option to skip itinerary/event linking
+  keyboard.push([{ text: '⏭ Skip — add without event', callback_data: 'it:skip' }]);
 
   await setState(telegramUserId, 'select_itinerary', {});
-  await sendMessage(chatId, '📋 Select an itinerary:', {
+  await sendMessage(chatId, '📋 Select an itinerary (or skip):', {
     reply_markup: { inline_keyboard: keyboard },
   });
 }
@@ -234,6 +233,20 @@ async function handleItinerarySelection(
   await answerCallbackQuery(callbackQueryId);
   const userId = await getLinkedUserId(telegramUserId);
   if (!userId) return;
+
+  // Skip itinerary/event — go straight to contact fields
+  if (itineraryId === 'skip') {
+    await setState(telegramUserId, 'input_telegram_handle', {
+      contact: {},
+    });
+    await sendMessage(
+      chatId,
+      '📝 Adding standalone contact\n\n' +
+        'Enter their <b>Telegram handle</b> (required):\n' +
+        '<i>e.g. @johndoe</i>'
+    );
+    return;
+  }
 
   // Fetch the itinerary to get events from the data JSON
   const { data: itinerary } = await supabase
@@ -274,7 +287,7 @@ async function handleItinerarySelection(
   }
 
   // Build inline keyboard — show date and title for each event
-  const keyboard = events.slice(0, 20).map((ev) => {
+  const keyboard: Array<Array<{ text: string; callback_data: string }>> = events.slice(0, 20).map((ev) => {
     const date = new Date(ev.date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -282,6 +295,9 @@ async function handleItinerarySelection(
     const label = `${date} — ${ev.title}`.substring(0, 60);
     return [{ text: label, callback_data: `ev:${ev.id}` }];
   });
+
+  // Option to skip event linking
+  keyboard.push([{ text: '⏭ Skip — add without event', callback_data: 'ev:skip' }]);
 
   await setState(telegramUserId, 'select_event', {
     itineraryId: itinerary.id,
@@ -305,6 +321,23 @@ async function handleEventSelection(
   await answerCallbackQuery(callbackQueryId);
 
   const currentState = await getState(telegramUserId);
+
+  // Skip event — keep itinerary info but no event
+  if (eventId === 'skip') {
+    await setState(telegramUserId, 'input_telegram_handle', {
+      itineraryId: currentState.data.itineraryId,
+      itineraryTitle: currentState.data.itineraryTitle,
+      contact: {},
+    });
+    await sendMessage(
+      chatId,
+      '📝 Adding contact (no event)\n\n' +
+        'Enter their <b>Telegram handle</b> (required):\n' +
+        '<i>e.g. @johndoe</i>'
+    );
+    return;
+  }
+
   const events = (currentState.data.events as EventInfo[]) || [];
   const selectedEvent = events.find((e) => e.id === eventId);
 
@@ -493,11 +526,17 @@ async function showConfirmation(
   stateData: Record<string, unknown>
 ) {
   const contact = stateData.contact as Record<string, string>;
-  const eventTitle = stateData.eventTitle as string;
-  const itineraryTitle = stateData.itineraryTitle as string;
+  const eventTitle = stateData.eventTitle as string | undefined;
+  const itineraryTitle = stateData.itineraryTitle as string | undefined;
 
   let summary = '<b>📋 Confirm new contact:</b>\n\n';
-  summary += `📍 ${itineraryTitle} → ${eventTitle}\n\n`;
+  if (itineraryTitle && eventTitle) {
+    summary += `📍 ${itineraryTitle} → ${eventTitle}\n\n`;
+  } else if (itineraryTitle) {
+    summary += `📍 ${itineraryTitle}\n\n`;
+  } else {
+    summary += '📍 Standalone contact\n\n';
+  }
   summary += `💬 Telegram: ${contact.telegramHandle}\n`;
   summary += `👤 Name: ${contact.firstName}`;
   if (contact.lastName) summary += ` ${contact.lastName}`;
@@ -549,25 +588,27 @@ async function handleConfirmation(
 
   const currentState = await getState(telegramUserId);
   const contact = currentState.data.contact as Record<string, string>;
-  const itineraryId = currentState.data.itineraryId as string;
-  const eventId = currentState.data.eventId as string;
-  const eventTitle = currentState.data.eventTitle as string;
-  const eventDate = currentState.data.eventDate as string;
+  const itineraryId = currentState.data.itineraryId as string | undefined;
+  const eventId = currentState.data.eventId as string | undefined;
+  const eventTitle = currentState.data.eventTitle as string | undefined;
+  const eventDate = currentState.data.eventDate as string | undefined;
 
-  // Look up the event's lumaEventUrl from itinerary data
+  // Look up the event's lumaEventUrl from itinerary data (only if we have both)
   let lumaEventUrl: string | undefined;
-  const { data: itinerary } = await supabase
-    .from('itineraries')
-    .select('data')
-    .eq('id', itineraryId)
-    .single();
+  if (itineraryId && eventId) {
+    const { data: itinerary } = await supabase
+      .from('itineraries')
+      .select('data')
+      .eq('id', itineraryId)
+      .single();
 
-  if (itinerary?.data) {
-    const itData = itinerary.data as { days?: Array<{ events?: Array<{ id: string; lumaEventUrl?: string }> }> };
-    for (const day of itData.days || []) {
-      for (const event of day.events || []) {
-        if (event.id === eventId) {
-          lumaEventUrl = event.lumaEventUrl;
+    if (itinerary?.data) {
+      const itData = itinerary.data as { days?: Array<{ events?: Array<{ id: string; lumaEventUrl?: string }> }> };
+      for (const day of itData.days || []) {
+        for (const event of day.events || []) {
+          if (event.id === eventId) {
+            lumaEventUrl = event.lumaEventUrl;
+          }
         }
       }
     }
@@ -575,8 +616,8 @@ async function handleConfirmation(
 
   // Insert contact into Supabase
   const { error } = await supabase.from('contacts').insert({
-    itinerary_id: itineraryId,
-    event_id: eventId,
+    itinerary_id: itineraryId || null,
+    event_id: eventId || null,
     user_id: userId,
     first_name: contact.firstName,
     last_name: contact.lastName || '',
@@ -584,9 +625,9 @@ async function handleConfirmation(
     position: contact.position || null,
     telegram_handle: contact.telegramHandle,
     notes: contact.notes || null,
-    event_title: eventTitle,
+    event_title: eventTitle || null,
     luma_event_url: lumaEventUrl || null,
-    date_met: eventDate,
+    date_met: eventDate || null,
   });
 
   await clearState(telegramUserId);

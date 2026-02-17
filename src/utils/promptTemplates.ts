@@ -27,8 +27,8 @@ export interface ItineraryContext {
     lastName: string;
     projectCompany?: string;
     position?: string;
-    eventTitle: string;
-    dateMet: string;
+    eventTitle?: string;
+    dateMet?: string;
     notes?: string;
   }>;
 }
@@ -54,7 +54,8 @@ export function getEventCreationPrompt(
         const date = c.dateMet ? new Date(c.dateMet).toISOString().split('T')[0] : 'Unknown date';
         const company = c.projectCompany ? ` (${c.projectCompany})` : '';
         const position = c.position ? ` - ${c.position}` : '';
-        return `- ${c.firstName} ${c.lastName}${company}${position} - Met at "${c.eventTitle}" on ${date}`;
+        const event = c.eventTitle ? ` - Met at "${c.eventTitle}"` : '';
+        return `- ${c.firstName} ${c.lastName}${company}${position}${event} on ${date}`;
       }).join('\n')
     : 'No contacts added yet';
 

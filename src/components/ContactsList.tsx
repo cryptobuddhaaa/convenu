@@ -182,23 +182,27 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
               )}
             </div>
 
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <div className="text-xs text-gray-500">
-                {contact.lumaEventUrl ? (
-                  <a
-                    href={contact.lumaEventUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-blue-600 hover:underline"
-                  >
-                    {contact.eventTitle}
-                  </a>
-                ) : (
-                  <p className="font-medium text-gray-700">{contact.eventTitle}</p>
-                )}
-                <p>{formatDate(contact.dateMet)}</p>
+            {(contact.eventTitle || contact.dateMet) && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="text-xs text-gray-500">
+                  {contact.eventTitle && (
+                    contact.lumaEventUrl ? (
+                      <a
+                        href={contact.lumaEventUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-blue-600 hover:underline"
+                      >
+                        {contact.eventTitle}
+                      </a>
+                    ) : (
+                      <p className="font-medium text-gray-700">{contact.eventTitle}</p>
+                    )
+                  )}
+                  {contact.dateMet && <p>{formatDate(contact.dateMet)}</p>}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         ))}
       </div>
