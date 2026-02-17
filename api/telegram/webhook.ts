@@ -517,10 +517,11 @@ async function showConfirmation(
         ],
         [
           { text: '✏️ Telegram', callback_data: 'ed:0' },
-          { text: '✏️ Name', callback_data: 'ed:1' },
-          { text: '✏️ Company', callback_data: 'ed:3' },
+          { text: '✏️ First Name', callback_data: 'ed:1' },
+          { text: '✏️ Last Name', callback_data: 'ed:2' },
         ],
         [
+          { text: '✏️ Company', callback_data: 'ed:3' },
           { text: '✏️ Position', callback_data: 'ed:4' },
           { text: '✏️ Notes', callback_data: 'ed:5' },
         ],
