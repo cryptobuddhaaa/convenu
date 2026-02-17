@@ -869,7 +869,7 @@ async function handleItineraryTextInput(
 ) {
   const state = currentState.state;
   const itData = { ...(currentState.data.itinerary as Record<string, string> || {}) };
-  const baseData = { ...currentState.data, itinerary: itData };
+  const baseData: Record<string, unknown> = { ...currentState.data, itinerary: itData };
 
   if (state === 'new_it_title') {
     const trimmed = text.trim();
@@ -1494,7 +1494,7 @@ async function handleNewEventTypeSelection(
   const currentState = await getState(telegramUserId);
   const eventData = { ...(currentState.data.event as Record<string, string> || {}) };
   eventData.eventType = eventType;
-  const updatedData = { ...currentState.data, event: eventData };
+  const updatedData: Record<string, unknown> = { ...currentState.data, event: eventData };
 
   // If editing from confirmation, return to confirmation
   if (currentState.data._editMode) {
@@ -1525,7 +1525,7 @@ async function handleEventTextInput(
   }
 
   const eventData = { ...(currentState.data.event as Record<string, string> || {}) };
-  const baseData = { ...currentState.data, event: eventData };
+  const baseData: Record<string, unknown> = { ...currentState.data, event: eventData };
 
   if (state === 'new_ev_title') {
     const trimmed = text.trim();
@@ -2057,7 +2057,7 @@ async function handleContacts(chatId: number, telegramUserId: number) {
 
   if (!itineraries || itineraries.length === 0) {
     // No itineraries — show all contacts
-    await showContactsList(chatId, userId, undefined, 'All Contacts');
+    await showContactsList(chatId, userId, undefined, undefined, 'All Contacts');
     return;
   }
 
