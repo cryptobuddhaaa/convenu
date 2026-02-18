@@ -1822,22 +1822,45 @@ async function handleForwardedMessage(
   }
 
   // Extract sender info from forwarded message
+  // Support both legacy fields (Bot API <7.0) and forward_origin (Bot API 7.0+)
   const forwardFrom = msg.forward_from as { id?: number; first_name?: string; last_name?: string; username?: string } | undefined;
   const forwardSenderName = msg.forward_sender_name as string | undefined;
   const forwardDate = msg.forward_date as number | undefined;
+  const forwardOrigin = msg.forward_origin as {
+    type?: string;
+    sender_user?: { id?: number; first_name?: string; last_name?: string; username?: string };
+    sender_user_name?: string;
+    date?: number;
+  } | undefined;
 
   let firstName = '';
   let lastName = '';
   let telegramHandle = '';
+  let fwdDate = forwardDate;
 
   if (forwardFrom) {
+    // Legacy field — user allows forwarding identity
     firstName = forwardFrom.first_name || '';
     lastName = forwardFrom.last_name || '';
     if (forwardFrom.username) {
       telegramHandle = `@${forwardFrom.username}`;
     }
+  } else if (forwardOrigin) {
+    // Bot API 7.0+ — forward_origin object
+    if (forwardOrigin.date) fwdDate = forwardOrigin.date;
+    if (forwardOrigin.type === 'user' && forwardOrigin.sender_user) {
+      firstName = forwardOrigin.sender_user.first_name || '';
+      lastName = forwardOrigin.sender_user.last_name || '';
+      if (forwardOrigin.sender_user.username) {
+        telegramHandle = `@${forwardOrigin.sender_user.username}`;
+      }
+    } else if (forwardOrigin.type === 'hidden_user' && forwardOrigin.sender_user_name) {
+      const parts = forwardOrigin.sender_user_name.split(' ');
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || '';
+    }
   } else if (forwardSenderName) {
-    // Privacy-restricted user — only have display name
+    // Legacy fallback — privacy-restricted user, only have display name
     const parts = forwardSenderName.split(' ');
     firstName = parts[0] || '';
     lastName = parts.slice(1).join(' ') || '';
@@ -1855,21 +1878,23 @@ async function handleForwardedMessage(
   }
 
   // Check if this person is already in the user's contacts
-  const handleNorm = telegramHandle ? telegramHandle.replace('@', '').toLowerCase() : '';
+  // Normalize handle: strip @ and lowercase for comparison
+  const handleNorm = telegramHandle ? telegramHandle.replace(/^@/, '').toLowerCase() : '';
   let existingContact: Record<string, unknown> | null = null;
 
   if (handleNorm) {
+    // Try exact match first (with or without @ prefix), then fuzzy
     const { data } = await supabase
       .from('contacts')
       .select('id, first_name, last_name, telegram_handle')
       .eq('user_id', userId)
-      .ilike('telegram_handle', `%${handleNorm}%`)
+      .or(`telegram_handle.ilike.@${handleNorm},telegram_handle.ilike.${handleNorm}`)
       .limit(1)
-      .single();
+      .maybeSingle();
     if (data) existingContact = data;
   }
 
-  if (!existingContact) {
+  if (!existingContact && firstName) {
     const { data } = await supabase
       .from('contacts')
       .select('id, first_name, last_name, telegram_handle')
@@ -1877,7 +1902,7 @@ async function handleForwardedMessage(
       .ilike('first_name', firstName)
       .ilike('last_name', lastName || '')
       .limit(1)
-      .single();
+      .maybeSingle();
     if (data) existingContact = data;
   }
 
@@ -1918,9 +1943,9 @@ async function handleForwardedMessage(
   let matchedEventTitle: string | undefined;
   let matchedEventDate: string | undefined;
 
-  if (forwardDate) {
-    const fwdDate = new Date(forwardDate * 1000);
-    const fwdDateStr = fwdDate.toISOString().split('T')[0];
+  if (fwdDate) {
+    const fwdDateTime = new Date(fwdDate * 1000);
+    const fwdDateStr = fwdDateTime.toISOString().split('T')[0];
 
     // Fetch user's itineraries to find matching events
     const { data: itineraries } = await supabase
@@ -1945,7 +1970,7 @@ async function handleForwardedMessage(
             let bestDiff = Infinity;
             for (const ev of events) {
               const evTime = new Date(ev.startTime).getTime();
-              const diff = Math.abs(fwdDate.getTime() - evTime);
+              const diff = Math.abs(fwdDateTime.getTime() - evTime);
               if (diff < bestDiff) {
                 bestDiff = diff;
                 bestEvent = ev;
@@ -2599,7 +2624,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const text: string = msg.text || '';
 
       // Check for forwarded messages first — auto-create contact from sender
-      if (msg.forward_from || msg.forward_sender_name) {
+      // Support both legacy (forward_from/forward_sender_name) and Bot API 7.0+ (forward_origin)
+      if (msg.forward_from || msg.forward_sender_name || msg.forward_origin) {
         await handleForwardedMessage(chatId, telegramUserId, msg);
       } else if (text.startsWith('/start')) {
         const args = text.substring('/start'.length).trim();
