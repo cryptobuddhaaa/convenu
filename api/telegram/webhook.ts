@@ -3491,7 +3491,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await handlePoints(chatId, telegramUserId);
       } else if (text === '/trust') {
         await handleTrust(chatId, telegramUserId);
-      } else if (text === '/handshakes') {
+      } else if (text === '/shakehistory') {
         await handleMyHandshakes(chatId, telegramUserId);
       } else if (text === '/cancel') {
         await clearState(telegramUserId);
@@ -3512,7 +3512,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             '🤝 <b>Proof of Handshake</b>\n' +
             '/handshake — Send a handshake to a contact\n' +
             '/handshake @handle — Send directly by Telegram handle\n' +
-            '/handshakes — View your handshake history\n' +
+            '/shakehistory — View your handshake history\n' +
             '/points — Check your points balance\n' +
             '/trust — View your trust score breakdown\n\n' +
             '⚡ <b>Quick Actions</b>\n' +
