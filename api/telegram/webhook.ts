@@ -693,6 +693,7 @@ async function showContactConfirmation(
   const contact = stateData.contact as Record<string, string>;
   const eventTitle = stateData.eventTitle as string | undefined;
   const itineraryTitle = stateData.itineraryTitle as string | undefined;
+  const selectedTags = (stateData._selectedTags as string[] | undefined) || [];
 
   let summary = '<b>📋 Confirm new contact:</b>\n\n';
   if (itineraryTitle && eventTitle) {
@@ -709,6 +710,7 @@ async function showContactConfirmation(
   if (contact.projectCompany) summary += `🏢 Company: ${contact.projectCompany}\n`;
   if (contact.position) summary += `💼 Position: ${contact.position}\n`;
   if (contact.notes) summary += `📝 Notes: ${contact.notes}\n`;
+  if (selectedTags.length > 0) summary += `🏷 Labels: ${selectedTags.join(', ')}\n`;
 
   await setState(telegramUserId, 'confirm', stateData);
 
@@ -729,9 +731,110 @@ async function showContactConfirmation(
           { text: '✏️ Position', callback_data: 'ed:4' },
           { text: '✏️ Notes', callback_data: 'ed:5' },
         ],
+        [
+          { text: `🏷 Labels${selectedTags.length > 0 ? ` (${selectedTags.length})` : ''}`, callback_data: 'tg:show' },
+        ],
       ],
     },
   });
+}
+
+async function handleTagSelection(
+  chatId: number,
+  telegramUserId: number,
+  action: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const currentState = await getState(telegramUserId);
+  if (currentState.state !== 'confirm' && currentState.state !== 'select_tags') {
+    await sendMessage(chatId, '❌ Session expired. Please start over.');
+    return;
+  }
+
+  const selectedTags = (currentState.data._selectedTags as string[] | undefined) || [];
+
+  if (action === 'show') {
+    // Fetch user's tags and show toggle keyboard
+    const userId = await getLinkedUserId(telegramUserId);
+    if (!userId) return;
+
+    const { data: userTags } = await supabase
+      .from('user_tags')
+      .select('name')
+      .eq('user_id', userId)
+      .order('name', { ascending: true });
+
+    if (!userTags || userTags.length === 0) {
+      await sendMessage(chatId, '🏷 No labels created yet. Create labels in the web app first, then assign them here.');
+      return;
+    }
+
+    await setState(telegramUserId, 'select_tags', currentState.data);
+
+    const keyboard = userTags.map((t) => {
+      const name = t.name as string;
+      const selected = selectedTags.includes(name);
+      return [{ text: `${selected ? '✅' : '⬜️'} ${name}`, callback_data: `tg:t:${name.substring(0, 55)}` }];
+    });
+    keyboard.push([{ text: '✅ Done', callback_data: 'tg:done' }]);
+
+    await sendMessage(chatId,
+      `🏷 <b>Select labels</b> (up to 3):\n\nCurrently selected: ${selectedTags.length > 0 ? selectedTags.join(', ') : 'none'}`,
+      { reply_markup: { inline_keyboard: keyboard } }
+    );
+    return;
+  }
+
+  if (action === 'done') {
+    // Return to confirmation screen
+    await showContactConfirmation(chatId, telegramUserId, currentState.data);
+    return;
+  }
+
+  if (action.startsWith('t:')) {
+    // Toggle a tag
+    const tagName = action.substring(2);
+    let newTags: string[];
+
+    if (selectedTags.includes(tagName)) {
+      newTags = selectedTags.filter((t) => t !== tagName);
+    } else if (selectedTags.length >= 3) {
+      await sendMessage(chatId, '⚠️ Maximum 3 labels per contact. Remove one first.');
+      return;
+    } else {
+      newTags = [...selectedTags, tagName];
+    }
+
+    const updatedData = { ...currentState.data, _selectedTags: newTags };
+    await setState(telegramUserId, 'select_tags', updatedData);
+
+    // Fetch user's tags to rebuild the keyboard
+    const userId = await getLinkedUserId(telegramUserId);
+    if (!userId) return;
+
+    const { data: userTags } = await supabase
+      .from('user_tags')
+      .select('name')
+      .eq('user_id', userId)
+      .order('name', { ascending: true });
+
+    if (!userTags) return;
+
+    const keyboard = userTags.map((t) => {
+      const name = t.name as string;
+      const selected = newTags.includes(name);
+      return [{ text: `${selected ? '✅' : '⬜️'} ${name}`, callback_data: `tg:t:${name.substring(0, 55)}` }];
+    });
+    keyboard.push([{ text: '✅ Done', callback_data: 'tg:done' }]);
+
+    await sendMessage(chatId,
+      `🏷 <b>Select labels</b> (up to 3):\n\nCurrently selected: ${newTags.length > 0 ? newTags.join(', ') : 'none'}`,
+      { reply_markup: { inline_keyboard: keyboard } }
+    );
+    return;
+  }
 }
 
 async function handleContactConfirmation(
@@ -757,6 +860,7 @@ async function handleContactConfirmation(
   const eventId = currentState.data.eventId as string | undefined;
   const eventTitle = currentState.data.eventTitle as string | undefined;
   const eventDate = currentState.data.eventDate as string | undefined;
+  const selectedTags = (currentState.data._selectedTags as string[] | undefined) || [];
 
   // Look up the event's lumaEventUrl from itinerary data (only if we have both)
   let lumaEventUrl: string | undefined;
@@ -793,6 +897,7 @@ async function handleContactConfirmation(
     event_title: eventTitle || null,
     luma_event_url: lumaEventUrl || null,
     date_met: eventDate || null,
+    tags: selectedTags.length > 0 ? selectedTags : [],
   });
 
   await clearState(telegramUserId);
@@ -2750,6 +2855,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (data.startsWith('xe:')) {
         const fieldIndex = parseInt(data.substring(3), 10);
         await handleEventEdit(chatId, telegramUserId, fieldIndex, cq.id);
+      }
+      // --- Tag selection callbacks ---
+      else if (data.startsWith('tg:')) {
+        await handleTagSelection(chatId, telegramUserId, data.substring(3), cq.id);
       }
       // --- Forward event choice callbacks ---
       else if (data.startsWith('fw:')) {
