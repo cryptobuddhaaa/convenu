@@ -83,9 +83,10 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
 
       // Submit the signed transaction
       const serialized = signedTx.serialize();
+      const base64Tx = btoa(String.fromCharCode(...serialized));
       const confirmResult = await confirmTx(
         result.handshakeId,
-        Buffer.from(serialized).toString('base64'),
+        base64Tx,
         'initiator'
       );
 

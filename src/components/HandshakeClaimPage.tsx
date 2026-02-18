@@ -25,8 +25,8 @@ interface HandshakeClaimPageProps {
 
 export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPageProps) {
   const { user } = useAuth();
-  const { connected, publicKey, signTransaction } = useWallet();
-  const { getPrimaryWallet, linkWallet, verifyWallet } = useUserWallet();
+  const { connected, signTransaction } = useWallet();
+  const { getPrimaryWallet } = useUserWallet();
   const [claimData, setClaimData] = useState<ClaimData | null>(null);
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
@@ -85,7 +85,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           handshakeId: claimData.handshakeId,
-          signedTransaction: Buffer.from(serialized).toString('base64'),
+          signedTransaction: btoa(String.fromCharCode(...serialized)),
           side: 'receiver',
         }),
       });
