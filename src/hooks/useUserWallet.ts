@@ -96,6 +96,10 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
       set({ wallets: [...get().wallets, wallet] });
       return wallet;
     } catch (error) {
+      // Re-throw user-facing errors (uniqueness checks)
+      if (error instanceof Error && error.message.includes('already')) {
+        throw error;
+      }
       console.error('Failed to link wallet:', error);
       return null;
     }
