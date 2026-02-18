@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useItinerary } from './hooks/useItinerary';
 import { useContacts } from './hooks/useContacts';
@@ -116,6 +116,59 @@ function App() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [activeTab, showCreateForm]);
 
+  // Pull-to-refresh
+  const [refreshing, setRefreshing] = useState(false);
+  const pullStartY = useRef(0);
+  const pullRef = useRef<HTMLDivElement>(null);
+
+  const handleRefresh = useCallback(async () => {
+    if (!user || refreshing) return;
+    setRefreshing(true);
+    try {
+      await Promise.all([initialize(user.id), initializeContacts(user.id)]);
+    } catch {
+      // ignore
+    }
+    setRefreshing(false);
+  }, [user, refreshing, initialize, initializeContacts]);
+
+  useEffect(() => {
+    const el = pullRef.current;
+    if (!el) return;
+
+    let startY = 0;
+    let pulling = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (window.scrollY === 0) {
+        startY = e.touches[0].clientY;
+        pulling = true;
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pulling) return;
+      const diff = e.touches[0].clientY - startY;
+      pullStartY.current = diff;
+    };
+    const onTouchEnd = () => {
+      if (pulling && pullStartY.current > 80) {
+        handleRefresh();
+      }
+      pulling = false;
+      pullStartY.current = 0;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: true });
+    el.addEventListener('touchend', onTouchEnd);
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [handleRefresh]);
+
   // Show loading state
   if (authLoading) {
     return (
@@ -211,7 +264,15 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div ref={pullRef} className="min-h-screen bg-slate-900">
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center py-2 bg-blue-600/90">
+          <div className="flex items-center gap-2 text-white text-sm">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+            Refreshing...
+          </div>
+        </div>
+      )}
       <header className="bg-slate-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -262,7 +323,7 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto px-4 py-8 pb-20 sm:pb-8 sm:px-6 lg:px-8">
         {itineraries.length === 0 ? (
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-8">
@@ -273,8 +334,8 @@ function App() {
           </div>
         ) : (
           <div>
-            <div className="mb-6 -mx-4 sm:mx-0">
-              <nav className="flex space-x-2 sm:space-x-4 border-b border-slate-700 overflow-x-auto px-4 sm:px-0 scrollbar-hide">
+            <div className="mb-6 -mx-4 sm:mx-0 hidden sm:block">
+              <nav className="flex space-x-4 border-b border-slate-700 overflow-x-auto scrollbar-hide">
                 <button
                   onClick={() => setActiveTab('itinerary')}
                   className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
@@ -464,6 +525,52 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Mobile bottom navigation */}
+      {itineraries.length > 0 && (
+        <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-40">
+          <div className="flex justify-around">
+            <button
+              onClick={() => setActiveTab('itinerary')}
+              className={`flex-1 flex flex-col items-center py-2 text-xs ${
+                activeTab === 'itinerary' ? 'text-blue-400' : 'text-slate-400'
+              }`}
+            >
+              <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Trips
+            </button>
+            <button
+              onClick={() => setActiveTab('shared')}
+              className={`flex-1 flex flex-col items-center py-2 text-xs relative ${
+                activeTab === 'shared' ? 'text-blue-400' : 'text-slate-400'
+              }`}
+            >
+              <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              Shared
+              {viewedSharedItineraries.length > 0 && (
+                <span className="absolute top-1 right-1/4 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-medium bg-blue-600 text-white">
+                  {viewedSharedItineraries.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('contacts')}
+              className={`flex-1 flex flex-col items-center py-2 text-xs ${
+                activeTab === 'contacts' ? 'text-blue-400' : 'text-slate-400'
+              }`}
+            >
+              <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Contacts
+            </button>
+          </div>
+        </nav>
+      )}
 
       {showShareDialog && itinerary && (
         <ShareDialog

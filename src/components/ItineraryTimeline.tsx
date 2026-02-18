@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useItinerary, generateEventId } from '../hooks/useItinerary';
 import { useContacts } from '../hooks/useContacts';
 import { useAuth } from '../hooks/useAuth';
@@ -30,9 +30,13 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [eventSearch, setEventSearch] = useState('');
   const { confirm, dialogProps } = useConfirmDialog();
+  const dayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const itinerary = sharedItinerary || currentItinerary();
   if (!itinerary) return null;
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const hasToday = itinerary.days.some((d) => d.date === todayStr);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -52,6 +56,20 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
       hour12: true
     });
   };
+
+  const scrollToToday = useCallback(() => {
+    // Expand today's day card
+    setExpandedDays((prev) => {
+      const newSet = new Set(prev);
+      newSet.add(todayStr);
+      return newSet;
+    });
+    // Scroll to it after a tick (so it has time to expand)
+    setTimeout(() => {
+      const el = dayRefs.current.get(todayStr);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }, [todayStr]);
 
   const toggleDayExpansion = (date: string) => {
     setExpandedDays((prev) => {
@@ -241,10 +259,10 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
         </div>
       </div>
 
-      {/* Event search */}
+      {/* Event search + Today button */}
       {itinerary.days.some((d) => d.events.length > 0) && (
-        <div className="mb-4">
-          <div className="relative">
+        <div className="mb-4 flex gap-2">
+          <div className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <svg className="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -269,6 +287,17 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
               </button>
             )}
           </div>
+          {hasToday && (
+            <button
+              onClick={scrollToToday}
+              className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Today
+            </button>
+          )}
         </div>
       )}
 
@@ -289,7 +318,11 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
 
         const isExpanded = searchLower ? true : expandedDays.has(day.date);
         return (
-          <div key={day.date} className="bg-slate-800 shadow rounded-lg p-6 mb-6">
+          <div
+            key={day.date}
+            ref={(el) => { if (el) dayRefs.current.set(day.date, el); }}
+            className={`bg-slate-800 shadow rounded-lg p-6 mb-6${day.date === todayStr ? ' ring-1 ring-blue-500/50' : ''}`}
+          >
             <div className="flex justify-between items-center mb-4">
               <button
                 onClick={() => toggleDayExpansion(day.date)}
@@ -306,8 +339,11 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
                 <div>
-                  <h3 className="text-lg font-semibold text-white">
+                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                     Day {day.dayNumber}: {formatDate(day.date)}
+                    {day.date === todayStr && (
+                      <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-blue-600 text-white">Today</span>
+                    )}
                   </h3>
                   {day.goals.length > 0 && (
                     <p className="text-sm text-slate-300 mt-1">Goals: {day.goals.join(', ')}</p>
