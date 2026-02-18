@@ -3,10 +3,6 @@ import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { clusterApiUrl } from '@solana/web3.js';
 
-// Register Solflare with Wallet Standard (replaces legacy @solana/wallet-adapter-solflare)
-import { initialize as initializeSolflare } from '@solflare-wallet/wallet-adapter';
-initializeSolflare();
-
 // Register Mobile Wallet Adapter for Android MWA support (only on Android devices)
 import {
   registerMwa,
@@ -42,8 +38,8 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
   const network = (import.meta.env.VITE_SOLANA_NETWORK as 'devnet' | 'mainnet-beta') || 'devnet';
   const endpoint = import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl(network);
 
-  // Empty array — Phantom auto-registers via Wallet Standard,
-  // Solflare registered via initialize(), MWA registered via registerMwa()
+  // Empty array — Phantom auto-registers via Wallet Standard when extension is installed,
+  // MWA registered via registerMwa() on Android
   const wallets = useMemo(() => [], []);
 
   return (
