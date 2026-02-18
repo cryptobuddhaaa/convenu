@@ -3062,6 +3062,373 @@ async function handleTextInput(
 }
 
 // ============================================================
+// HANDSHAKE FLOW (/handshake)
+// ============================================================
+
+async function handleHandshake(chatId: number, telegramUserId: number, args: string) {
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) {
+    await sendMessage(chatId, '❌ Your account is not linked yet.\n\nGo to your web app → Contacts → Link Telegram.');
+    return;
+  }
+
+  // Check if user has a verified wallet
+  const { data: wallets } = await supabase
+    .from('user_wallets')
+    .select('wallet_address, verified_at')
+    .eq('user_id', userId);
+
+  const verifiedWallet = wallets?.find((w: { verified_at: string | null }) => w.verified_at != null);
+  if (!verifiedWallet) {
+    await sendMessage(
+      chatId,
+      '❌ You need a verified Solana wallet to send handshakes.\n\n' +
+        'Open the web app → connect your wallet → verify it first.',
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+          ],
+        },
+      }
+    );
+    return;
+  }
+
+  if (!args) {
+    // Show contacts list to pick from
+    const { data: contacts } = await supabase
+      .from('contacts')
+      .select('id, first_name, last_name, telegram_handle, email')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (!contacts || contacts.length === 0) {
+      await sendMessage(chatId, '📋 You have no contacts yet. Add contacts first, then send handshakes.');
+      return;
+    }
+
+    const keyboard = contacts.map((c: { id: string; first_name: string; last_name: string; telegram_handle: string | null; email: string | null }) => [{
+      text: `${c.first_name} ${c.last_name || ''}`.trim() + (c.telegram_handle ? ` (@${c.telegram_handle.replace('@', '')})` : ''),
+      callback_data: `hs:${c.id}`,
+    }]);
+
+    await sendMessage(
+      chatId,
+      '🤝 <b>Send a Handshake</b>\n\n' +
+        'Select a contact to send a Proof of Handshake.\n' +
+        'Both parties pay 0.01 SOL and receive a soulbound NFT.\n\n' +
+        'Pick a contact:',
+      { reply_markup: { inline_keyboard: keyboard } }
+    );
+    return;
+  }
+
+  // Direct handshake by @username
+  const handle = args.replace('@', '').trim();
+  if (!handle) {
+    await sendMessage(chatId, 'Usage: /handshake @username');
+    return;
+  }
+
+  // Find contact with this telegram handle
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('id, first_name, last_name, telegram_handle, email')
+    .eq('user_id', userId)
+    .ilike('telegram_handle', handle)
+    .single();
+
+  if (!contact) {
+    await sendMessage(
+      chatId,
+      `❌ No contact found with handle @${handle}.\n\nMake sure they're in your contacts list first.`
+    );
+    return;
+  }
+
+  await initiateHandshakeFromBot(chatId, userId, contact.id, verifiedWallet.wallet_address, contact);
+}
+
+async function handleHandshakeSelection(
+  chatId: number,
+  telegramUserId: number,
+  contactId: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) return;
+
+  const { data: wallets } = await supabase
+    .from('user_wallets')
+    .select('wallet_address, verified_at')
+    .eq('user_id', userId);
+
+  const verifiedWallet = wallets?.find((w: { verified_at: string | null }) => w.verified_at != null);
+  if (!verifiedWallet) {
+    await sendMessage(chatId, '❌ No verified wallet found. Connect one in the web app first.');
+    return;
+  }
+
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('id, first_name, last_name, telegram_handle, email')
+    .eq('id', contactId)
+    .single();
+
+  if (!contact) {
+    await sendMessage(chatId, '❌ Contact not found.');
+    return;
+  }
+
+  await initiateHandshakeFromBot(chatId, userId, contactId, verifiedWallet.wallet_address, contact);
+}
+
+async function initiateHandshakeFromBot(
+  chatId: number,
+  userId: string,
+  contactId: string,
+  walletAddress: string,
+  contact: { id: string; first_name: string; last_name: string; telegram_handle: string | null; email: string | null }
+) {
+  const receiverIdentifier = contact.telegram_handle
+    ? `@${contact.telegram_handle.replace('@', '')}`
+    : contact.email;
+
+  if (!receiverIdentifier) {
+    await sendMessage(chatId, '❌ This contact has no Telegram handle or email — cannot send a handshake.');
+    return;
+  }
+
+  // Check for existing handshake
+  const { data: existing } = await supabase
+    .from('handshakes')
+    .select('id, status')
+    .eq('contact_id', contactId)
+    .in('status', ['pending', 'matched', 'minted'])
+    .single();
+
+  if (existing) {
+    const statusEmoji: Record<string, string> = { pending: '⏳', matched: '🔄', minted: '✅' };
+    await sendMessage(
+      chatId,
+      `${statusEmoji[existing.status] || '📋'} A handshake with ${contact.first_name} already exists (${existing.status}).`
+    );
+    return;
+  }
+
+  // Create the handshake
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+
+  const { data: handshake, error: hsError } = await supabase
+    .from('handshakes')
+    .insert({
+      initiator_user_id: userId,
+      receiver_identifier: receiverIdentifier,
+      contact_id: contactId,
+      initiator_wallet: walletAddress,
+      status: 'pending',
+      mint_fee_lamports: 10000000, // 0.01 SOL
+      expires_at: expiresAt.toISOString(),
+    })
+    .select()
+    .single();
+
+  if (hsError || !handshake) {
+    await sendMessage(chatId, '❌ Failed to create handshake. Please try again.');
+    return;
+  }
+
+  const contactName = `${contact.first_name} ${contact.last_name || ''}`.trim();
+  const claimUrl = `${WEBAPP_URL}?claim=${handshake.id}`;
+
+  await sendMessage(
+    chatId,
+    `🤝 <b>Handshake sent to ${contactName}!</b>\n\n` +
+      `Receiver: ${receiverIdentifier}\n` +
+      `Fee: 0.01 SOL each (pay in the web app)\n` +
+      `Expires: ${expiresAt.toLocaleDateString()}\n\n` +
+      `⚠️ <b>Next steps:</b>\n` +
+      `1. Pay your 0.01 SOL fee in the web app\n` +
+      `2. Share this claim link with ${contactName}:\n\n` +
+      `<code>${claimUrl}</code>\n\n` +
+      `They'll need to sign in, connect a wallet, and pay their 0.01 SOL to complete the handshake.`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📱 Pay in App', web_app: { url: WEBAPP_URL } }],
+        ],
+      },
+    }
+  );
+
+  // Try to notify the receiver if they have a linked Telegram account
+  if (contact.telegram_handle) {
+    const { data: receiverLink } = await supabase
+      .from('telegram_links')
+      .select('telegram_user_id')
+      .eq('telegram_username', contact.telegram_handle.replace('@', ''))
+      .single();
+
+    if (receiverLink) {
+      // Get initiator name
+      const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+      const initiatorName = authUser?.user?.user_metadata?.full_name || authUser?.user?.email || 'Someone';
+
+      await sendMessage(
+        receiverLink.telegram_user_id,
+        `🤝 <b>New Handshake Request!</b>\n\n` +
+          `<b>${initiatorName}</b> wants to prove you met.\n\n` +
+          `To accept, open this link:\n` +
+          `<code>${claimUrl}</code>\n\n` +
+          `You'll need to connect a wallet and pay 0.01 SOL.\n` +
+          `Both of you will receive a soulbound NFT as proof!`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🤝 Claim Handshake', web_app: { url: `${WEBAPP_URL}?claim=${handshake.id}` } }],
+            ],
+          },
+        }
+      );
+    }
+  }
+}
+
+// ============================================================
+// POINTS & TRUST COMMANDS
+// ============================================================
+
+async function handlePoints(chatId: number, telegramUserId: number) {
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) {
+    await sendMessage(chatId, '❌ Your account is not linked yet.');
+    return;
+  }
+
+  // Get total points
+  const { data: points } = await supabase
+    .from('user_points')
+    .select('points, reason, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  const total = points?.reduce((sum: number, p: { points: number }) => sum + p.points, 0) || 0;
+
+  let msg = `🏆 <b>Your Points: ${total}</b>\n\n`;
+
+  if (points && points.length > 0) {
+    msg += '<b>Recent:</b>\n';
+    for (const p of points) {
+      const date = new Date(p.created_at as string).toLocaleDateString();
+      msg += `  +${p.points} — ${p.reason} (${date})\n`;
+    }
+  } else {
+    msg += 'No points earned yet. Complete handshakes to earn points!';
+  }
+
+  await sendMessage(chatId, msg);
+}
+
+async function handleTrust(chatId: number, telegramUserId: number) {
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) {
+    await sendMessage(chatId, '❌ Your account is not linked yet.');
+    return;
+  }
+
+  const { data: trust } = await supabase
+    .from('trust_scores')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (!trust) {
+    await sendMessage(
+      chatId,
+      '📊 <b>Trust Score: Not computed yet</b>\n\n' +
+        'Your trust score will be computed after you:\n' +
+        '• Link your Telegram account ✅ (done!)\n' +
+        '• Connect & verify a Solana wallet\n' +
+        '• Complete handshakes'
+    );
+    return;
+  }
+
+  const levelNames: Record<number, string> = {
+    1: 'Newcomer',
+    2: 'Verified',
+    3: 'Trusted',
+    4: 'Established',
+    5: 'Champion',
+  };
+
+  const stars = '★'.repeat(trust.trust_level) + '☆'.repeat(5 - trust.trust_level);
+  const check = (v: boolean) => v ? '✅' : '❌';
+
+  await sendMessage(
+    chatId,
+    `📊 <b>Trust Score: ${trust.trust_level}/5</b> — ${levelNames[trust.trust_level] || 'Unknown'}\n` +
+      `${stars}\n\n` +
+      `<b>Signals:</b>\n` +
+      `${check(trust.telegram_premium)} Telegram Premium (+2.0)\n` +
+      `${check(trust.has_profile_photo)} Profile Photo (+0.5)\n` +
+      `${check(trust.has_username)} Username (+0.5)\n` +
+      `${check(trust.telegram_account_age_days > 365)} Account Age > 1yr (+0.5)\n` +
+      `${check(trust.wallet_connected)} Verified Wallet (+0.5)\n` +
+      `${check(trust.total_handshakes >= 3)} 3+ Handshakes (+0.5)\n\n` +
+      `Total Handshakes: ${trust.total_handshakes}`
+  );
+}
+
+async function handleMyHandshakes(chatId: number, telegramUserId: number) {
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) {
+    await sendMessage(chatId, '❌ Your account is not linked yet.');
+    return;
+  }
+
+  const { data: handshakes } = await supabase
+    .from('handshakes')
+    .select('id, status, receiver_identifier, event_title, created_at, points_awarded')
+    .or(`initiator_user_id.eq.${userId},receiver_user_id.eq.${userId}`)
+    .in('status', ['pending', 'matched', 'minted'])
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (!handshakes || handshakes.length === 0) {
+    await sendMessage(
+      chatId,
+      '🤝 <b>No handshakes yet.</b>\n\nUse /handshake to send your first one!'
+    );
+    return;
+  }
+
+  const statusEmoji: Record<string, string> = {
+    pending: '⏳',
+    matched: '🔄',
+    minted: '✅',
+  };
+
+  let msg = '🤝 <b>Your Handshakes</b>\n\n';
+  for (const h of handshakes) {
+    const emoji = statusEmoji[h.status] || '📋';
+    const name = h.event_title || h.receiver_identifier || 'Unknown';
+    const date = new Date(h.created_at).toLocaleDateString();
+    const pts = h.points_awarded > 0 ? ` (+${h.points_awarded}pts)` : '';
+    msg += `${emoji} ${name} — ${h.status}${pts} (${date})\n`;
+  }
+
+  msg += '\nUse /handshake to send a new one.';
+  await sendMessage(chatId, msg);
+}
+
+// ============================================================
 // MAIN HANDLER
 // ============================================================
 
@@ -3117,6 +3484,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (text.startsWith('/contacted')) {
         const args = text.substring('/contacted'.length).trim();
         await handleContacted(chatId, telegramUserId, args);
+      } else if (text.startsWith('/handshake')) {
+        const args = text.substring('/handshake'.length).trim();
+        await handleHandshake(chatId, telegramUserId, args);
+      } else if (text === '/points') {
+        await handlePoints(chatId, telegramUserId);
+      } else if (text === '/trust') {
+        await handleTrust(chatId, telegramUserId);
+      } else if (text === '/handshakes') {
+        await handleMyHandshakes(chatId, telegramUserId);
       } else if (text === '/cancel') {
         await clearState(telegramUserId);
         await sendMessage(chatId, '❌ Cancelled. Use /help for commands.');
@@ -3133,6 +3509,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             '/newcontact — Add a contact linked to a trip/event\n' +
             '/contacts — Browse contacts by trip, event, or all\n' +
             '/contacted @handle — Mark that you\'ve reached out to someone\n\n' +
+            '🤝 <b>Proof of Handshake</b>\n' +
+            '/handshake — Send a handshake to a contact\n' +
+            '/handshake @handle — Send directly by Telegram handle\n' +
+            '/handshakes — View your handshake history\n' +
+            '/points — Check your points balance\n' +
+            '/trust — View your trust score breakdown\n\n' +
             '⚡ <b>Quick Actions</b>\n' +
             '• <b>Forward a message</b> → if the sender is already a contact, save it as a timestamped note; otherwise create a new contact\n' +
             '• <b>Paste Luma links</b> during /newevent → auto-imports event details\n\n' +
@@ -3213,6 +3595,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // --- Forward note choice callbacks (existing contact found) ---
       else if (data.startsWith('fn:')) {
         await handleForwardNoteChoice(chatId, telegramUserId, data.substring(3), cq.id);
+      }
+      // --- Handshake callbacks ---
+      else if (data.startsWith('hs:')) {
+        await handleHandshakeSelection(chatId, telegramUserId, data.substring(3), cq.id);
       }
       // --- Contacts list callbacks ---
       else if (data.startsWith('cl:')) {
