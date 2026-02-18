@@ -14,6 +14,8 @@ import { Toaster } from './components/Toast';
 import { ConfirmDialog, useConfirmDialog } from './components/ConfirmDialog';
 import { WalletButton } from './components/WalletButton';
 import { useUserWallet } from './hooks/useUserWallet';
+import { useHandshakes } from './hooks/useHandshakes';
+import { HandshakeClaimPage } from './components/HandshakeClaimPage';
 
 type ActiveTab = 'itinerary' | 'contacts' | 'shared';
 
@@ -22,11 +24,13 @@ function App() {
   const { currentItinerary, itineraries, initialize, initialized, reset } = useItinerary();
   const { initialize: initializeContacts, initialized: contactsInitialized, reset: resetContacts } = useContacts();
   const { initialize: initializeWallets, initialized: walletsInitialized, reset: resetWallets } = useUserWallet();
+  const { initialize: initializeHandshakes, initialized: handshakesInitialized, reset: resetHandshakes } = useHandshakes();
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('itinerary');
   const [prevItineraryCount, setPrevItineraryCount] = useState(itineraries.length);
   const [sharedItinerary, setSharedItinerary] = useState<Itinerary | null>(null);
+  const [claimHandshakeId, setClaimHandshakeId] = useState<string | null>(null);
   const [viewedSharedItineraries, setViewedSharedItineraries] = useState<Itinerary[]>([]);
   const [selectedSharedItinerary, setSelectedSharedItinerary] = useState<Itinerary | null>(null);
   const { confirm, dialogProps } = useConfirmDialog();
@@ -51,6 +55,15 @@ function App() {
       localStorage.setItem('viewedSharedItineraries', JSON.stringify(viewedSharedItineraries));
     }
   }, [viewedSharedItineraries]);
+
+  // Check for handshake claim in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const claimId = params.get('claim');
+    if (claimId) {
+      setClaimHandshakeId(claimId);
+    }
+  }, []);
 
   // Check for shared itinerary in URL on mount
   useEffect(() => {
@@ -99,7 +112,13 @@ function App() {
     } else if (!user && walletsInitialized) {
       resetWallets();
     }
-  }, [user, initialized, initialize, reset, contactsInitialized, initializeContacts, resetContacts, walletsInitialized, initializeWallets, resetWallets]);
+
+    if (user && !handshakesInitialized) {
+      initializeHandshakes(user.id);
+    } else if (!user && handshakesInitialized) {
+      resetHandshakes();
+    }
+  }, [user, initialized, initialize, reset, contactsInitialized, initializeContacts, resetContacts, walletsInitialized, initializeWallets, resetWallets, handshakesInitialized, initializeHandshakes, resetHandshakes]);
 
   // This effect is removed - we handle shared itineraries separately now
 
@@ -187,6 +206,19 @@ function App() {
           <p className="mt-4 text-slate-300">Loading...</p>
         </div>
       </div>
+    );
+  }
+
+  // If there's a handshake claim in the URL, show the claim page
+  if (claimHandshakeId) {
+    return (
+      <HandshakeClaimPage
+        handshakeId={claimHandshakeId}
+        onDone={() => {
+          setClaimHandshakeId(null);
+          window.history.replaceState({}, '', window.location.pathname);
+        }}
+      />
     );
   }
 

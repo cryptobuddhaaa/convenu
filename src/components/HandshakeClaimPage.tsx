@@ -1,0 +1,224 @@
+/**
+ * HandshakeClaimPage — landing page for receivers claiming a handshake.
+ * URL pattern: ?claim=<handshakeId>
+ */
+
+import { useEffect, useState } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { Transaction } from '@solana/web3.js';
+import { useAuth } from '../hooks/useAuth';
+import { useUserWallet } from '../hooks/useUserWallet';
+import { toast } from './Toast';
+
+interface ClaimData {
+  handshakeId: string;
+  status: string;
+  transaction: string;
+  initiatorName: string;
+}
+
+interface HandshakeClaimPageProps {
+  handshakeId: string;
+  onDone: () => void;
+}
+
+export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPageProps) {
+  const { user } = useAuth();
+  const { connected, publicKey, signTransaction } = useWallet();
+  const { getPrimaryWallet, linkWallet, verifyWallet } = useUserWallet();
+  const [claimData, setClaimData] = useState<ClaimData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [signing, setSigning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const wallet = getPrimaryWallet();
+
+  // Step 1: Claim the handshake (get transaction to sign)
+  useEffect(() => {
+    if (!user || !wallet) return;
+
+    const claim = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch('/api/handshake/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            handshakeId,
+            userId: user.id,
+            walletAddress: wallet.walletAddress,
+          }),
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          setError(err.error || 'Failed to claim handshake');
+          return;
+        }
+
+        const data = await response.json();
+        setClaimData(data);
+      } catch {
+        setError('Network error. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    claim();
+  }, [handshakeId, user, wallet]);
+
+  const handleSign = async () => {
+    if (!claimData || !signTransaction) return;
+
+    setSigning(true);
+    try {
+      const txBytes = Uint8Array.from(atob(claimData.transaction), (c) => c.charCodeAt(0));
+      const transaction = Transaction.from(txBytes);
+      const signedTx = await signTransaction(transaction);
+
+      const serialized = signedTx.serialize();
+      const response = await fetch('/api/handshake/confirm-tx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          handshakeId: claimData.handshakeId,
+          signedTransaction: Buffer.from(serialized).toString('base64'),
+          side: 'receiver',
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to confirm transaction');
+      }
+
+      const result = await response.json();
+
+      // If both sides have paid, trigger minting
+      if (result.bothPaid) {
+        await fetch('/api/handshake/mint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ handshakeId: claimData.handshakeId }),
+        });
+      }
+
+      setSuccess(true);
+      toast.success('Handshake confirmed! NFT minting in progress.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to sign';
+      if (message.includes('User rejected')) {
+        toast.info('Transaction cancelled');
+      } else {
+        toast.error(message);
+      }
+    } finally {
+      setSigning(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full">
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 mx-auto mb-4 bg-purple-900/30 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0 0v2.5m0-2.5h2.5M7 14H4.5m11-3.5V14m0 0v2.5m0-2.5h2.5M15.5 14H13" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-white">Proof of Handshake</h1>
+          <p className="text-slate-400 text-sm mt-1">Confirm your connection</p>
+        </div>
+
+        {!user && (
+          <div className="text-center">
+            <p className="text-slate-300 mb-4">Sign in to claim this handshake.</p>
+            <p className="text-slate-400 text-sm">You'll need to be logged in and have a verified wallet.</p>
+          </div>
+        )}
+
+        {user && !connected && (
+          <div className="text-center">
+            <p className="text-slate-300 mb-4">Connect your Solana wallet to proceed.</p>
+            <div className="flex justify-center">
+              <WalletMultiButton />
+            </div>
+          </div>
+        )}
+
+        {user && connected && !wallet && (
+          <div className="text-center">
+            <p className="text-slate-300 mb-4">Verify your wallet to claim this handshake.</p>
+            <p className="text-slate-400 text-sm">Your wallet needs to be linked and verified in your account settings.</p>
+          </div>
+        )}
+
+        {loading && user && wallet && (
+          <div className="text-center">
+            <svg className="w-8 h-8 animate-spin mx-auto text-purple-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-slate-400 mt-2">Loading handshake...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="text-center">
+            <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-4 mb-4">
+              <p className="text-red-300">{error}</p>
+            </div>
+            <button
+              onClick={onDone}
+              className="text-blue-400 hover:text-blue-300 text-sm"
+            >
+              Go back to app
+            </button>
+          </div>
+        )}
+
+        {claimData && !success && (
+          <div>
+            <div className="bg-slate-700/50 rounded-lg p-4 mb-4">
+              <p className="text-white font-medium">{claimData.initiatorName}</p>
+              <p className="text-slate-400 text-sm mt-1">
+                Fee: 0.01 SOL to confirm this handshake
+              </p>
+            </div>
+            <button
+              onClick={handleSign}
+              disabled={signing}
+              className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors"
+            >
+              {signing ? 'Signing transaction...' : 'Confirm & Pay 0.01 SOL'}
+            </button>
+          </div>
+        )}
+
+        {success && (
+          <div className="text-center">
+            <div className="bg-green-900/30 border border-green-700/50 rounded-lg p-4 mb-4">
+              <svg className="w-8 h-8 mx-auto text-green-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-green-300 font-medium">Handshake confirmed!</p>
+              <p className="text-green-400/70 text-sm mt-1">
+                Your soulbound NFT is being minted. +10 points!
+              </p>
+            </div>
+            <button
+              onClick={onDone}
+              className="text-blue-400 hover:text-blue-300 text-sm"
+            >
+              Go to app
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

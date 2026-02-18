@@ -5,6 +5,8 @@ import { extractLinkedInHandle } from '../lib/validation';
 import type { Contact } from '../models/types';
 import { toast } from './Toast';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
+import { HandshakeButton } from './HandshakeButton';
+import { useAuth } from '../hooks/useAuth';
 
 function getTimeAgo(dateStr: string): string {
   const now = new Date();
@@ -29,6 +31,7 @@ interface ContactsListProps {
 
 export default function ContactsList({ itineraryId, contacts: providedContacts }: ContactsListProps) {
   const { contacts, getContactsByItinerary, deleteContact, updateContact } = useContacts();
+  const { user } = useAuth();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const { confirm, dialogProps } = useConfirmDialog();
 
@@ -265,6 +268,12 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                   )}
                   {contact.dateMet && <p>{formatDate(contact.dateMet)}</p>}
                 </div>
+              </div>
+            )}
+
+            {user && (
+              <div className="mt-2 pt-2 border-t border-slate-700/50">
+                <HandshakeButton contact={contact} userId={user.id} />
               </div>
             )}
           </div>

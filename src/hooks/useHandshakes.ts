@@ -1,0 +1,163 @@
+/**
+ * Zustand store for handshake state.
+ * Manages initiating, claiming, and tracking proof-of-handshake flows.
+ */
+
+import { create } from 'zustand';
+import { supabase } from '../lib/supabase';
+import type { Handshake } from '../models/types';
+
+interface HandshakeState {
+  handshakes: Handshake[];
+  loading: boolean;
+  initialized: boolean;
+
+  initialize: (userId: string) => Promise<void>;
+  initiate: (userId: string, contactId: string, walletAddress: string) => Promise<{
+    handshakeId: string;
+    transaction: string;
+    receiverIdentifier: string;
+    contactName: string;
+  } | null>;
+  confirmTx: (handshakeId: string, signedTransaction: string, side: 'initiator' | 'receiver') => Promise<{
+    txSignature: string;
+    bothPaid: boolean;
+  } | null>;
+  mint: (handshakeId: string) => Promise<boolean>;
+  getByContactId: (contactId: string) => Handshake | undefined;
+  reset: () => void;
+}
+
+function mapRowToHandshake(row: Record<string, unknown>): Handshake {
+  return {
+    id: row.id as string,
+    initiatorUserId: row.initiator_user_id as string,
+    receiverUserId: (row.receiver_user_id as string) || null,
+    receiverIdentifier: row.receiver_identifier as string,
+    contactId: (row.contact_id as string) || null,
+    eventId: (row.event_id as string) || null,
+    eventTitle: (row.event_title as string) || null,
+    eventDate: (row.event_date as string) || null,
+    initiatorWallet: (row.initiator_wallet as string) || null,
+    receiverWallet: (row.receiver_wallet as string) || null,
+    initiatorMintedAt: (row.initiator_minted_at as string) || null,
+    receiverMintedAt: (row.receiver_minted_at as string) || null,
+    status: row.status as Handshake['status'],
+    initiatorNftAddress: (row.initiator_nft_address as string) || null,
+    receiverNftAddress: (row.receiver_nft_address as string) || null,
+    initiatorTxSignature: (row.initiator_tx_signature as string) || null,
+    receiverTxSignature: (row.receiver_tx_signature as string) || null,
+    pointsAwarded: (row.points_awarded as number) || 0,
+    mintFeeLamports: (row.mint_fee_lamports as number) || 0,
+    createdAt: row.created_at as string,
+    expiresAt: row.expires_at as string,
+  };
+}
+
+export const useHandshakes = create<HandshakeState>((set, get) => ({
+  handshakes: [],
+  loading: false,
+  initialized: false,
+
+  initialize: async (userId: string) => {
+    set({ loading: true });
+    try {
+      const { data, error } = await supabase
+        .from('handshakes')
+        .select('*')
+        .or(`initiator_user_id.eq.${userId},receiver_user_id.eq.${userId}`)
+        .in('status', ['pending', 'matched', 'minted'])
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading handshakes:', error);
+        set({ handshakes: [], loading: false, initialized: true });
+        return;
+      }
+
+      set({
+        handshakes: (data || []).map(mapRowToHandshake),
+        loading: false,
+        initialized: true,
+      });
+    } catch (error) {
+      console.error('Failed to initialize handshakes:', error);
+      set({ handshakes: [], loading: false, initialized: true });
+    }
+  },
+
+  initiate: async (userId: string, contactId: string, walletAddress: string) => {
+    try {
+      const response = await fetch('/api/handshake/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, contactId, walletAddress }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to initiate handshake');
+      }
+
+      const result = await response.json();
+
+      // Refresh handshakes list
+      await get().initialize(userId);
+
+      return result;
+    } catch (error) {
+      console.error('Failed to initiate handshake:', error);
+      throw error;
+    }
+  },
+
+  confirmTx: async (handshakeId: string, signedTransaction: string, side: 'initiator' | 'receiver') => {
+    try {
+      const response = await fetch('/api/handshake/confirm-tx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handshakeId, signedTransaction, side }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to confirm transaction');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to confirm tx:', error);
+      throw error;
+    }
+  },
+
+  mint: async (handshakeId: string) => {
+    try {
+      const response = await fetch('/api/handshake/mint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handshakeId }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to mint');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to mint:', error);
+      return false;
+    }
+  },
+
+  getByContactId: (contactId: string) => {
+    return get().handshakes.find(
+      (h) => h.contactId === contactId && ['pending', 'matched', 'minted'].includes(h.status)
+    );
+  },
+
+  reset: () => {
+    set({ handshakes: [], loading: false, initialized: false });
+  },
+}));

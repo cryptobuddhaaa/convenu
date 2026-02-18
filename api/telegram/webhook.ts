@@ -213,7 +213,8 @@ async function handleStart(
   chatId: number,
   telegramUserId: number,
   telegramUsername: string | undefined,
-  args: string
+  args: string,
+  telegramUser?: { is_premium?: boolean; has_profile_photo?: boolean }
 ) {
   if (!args) {
     const linked = await getLinkedUserId(telegramUserId);
@@ -295,6 +296,20 @@ async function handleStart(
     .from('telegram_link_codes')
     .update({ used: true })
     .eq('code', code);
+
+  // Store trust signals from Telegram user profile
+  if (telegramUser) {
+    await supabase.from('trust_scores').upsert(
+      {
+        user_id: linkCode.user_id,
+        telegram_premium: telegramUser.is_premium || false,
+        has_profile_photo: !!telegramUser.has_profile_photo,
+        has_username: !!telegramUsername,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    );
+  }
 
   await sendMessage(
     chatId,
@@ -3081,7 +3096,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await handleForwardedMessage(chatId, telegramUserId, msg);
       } else if (text.startsWith('/start')) {
         const args = text.substring('/start'.length).trim();
-        await handleStart(chatId, telegramUserId, telegramUsername, args);
+        await handleStart(chatId, telegramUserId, telegramUsername, args, {
+          is_premium: msg.from.is_premium,
+          has_profile_photo: msg.from.has_profile_photo,
+        });
       } else if (text === '/newcontact') {
         await handleNewContact(chatId, telegramUserId);
       } else if (text === '/newitinerary') {
