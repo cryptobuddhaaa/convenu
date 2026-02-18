@@ -9,6 +9,8 @@ import ContactsList from './ContactsList';
 import { AIAssistantModal } from './AIAssistant/AIAssistantModal';
 import GoogleCalendarImport from './GoogleCalendarImport';
 import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
+import { mapsService } from '../services/mapsService';
+import { printItinerary } from '../services/printService';
 import { toast } from './Toast';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 
@@ -70,6 +72,22 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   }, [todayStr]);
+
+  const hasLocation = (event: ItineraryEvent) =>
+    event.location && (event.location.name || event.location.address || event.location.coordinates);
+
+  const getDayRouteUrl = (events: ItineraryEvent[]) => {
+    const locEvents = events.filter(hasLocation);
+    if (locEvents.length < 2) return null;
+    const waypoints = locEvents.map((e) => mapsService.locationToQuery(e.location));
+    // Google Maps directions URL with waypoints
+    const origin = encodeURIComponent(waypoints[0]);
+    const destination = encodeURIComponent(waypoints[waypoints.length - 1]);
+    const waypointStr = waypoints.length > 2
+      ? `&waypoints=${waypoints.slice(1, -1).map(encodeURIComponent).join('|')}`
+      : '';
+    return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypointStr}`;
+  };
 
   const toggleDayExpansion = (date: string) => {
     setExpandedDays((prev) => {
@@ -225,21 +243,36 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
               <p className="text-sm text-slate-300 mt-2">{itinerary.goals}</p>
             )}
           </div>
-          {!readOnly && (
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={() => setShowAIAssistant(true)}
-                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-purple-500"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                AI Assistant
-              </button>
-              <GoogleCalendarImport
-                itinerary={itinerary}
-                onEventsImport={handleGoogleCalendarImport}
-              />
+          <div className="flex gap-2 flex-wrap">
+            {!readOnly && (
+              <>
+                <button
+                  onClick={() => setShowAIAssistant(true)}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-purple-500"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  AI Assistant
+                </button>
+                <GoogleCalendarImport
+                  itinerary={itinerary}
+                  onEventsImport={handleGoogleCalendarImport}
+                />
+              </>
+            )}
+            <button
+              onClick={() => printItinerary(itinerary)}
+              className="inline-flex items-center px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-700 hover:bg-slate-600"
+              title="Export as PDF"
+              aria-label="Export as PDF"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Export
+            </button>
+            {!readOnly && (
               <button
                 onClick={async () => {
                   const confirmed = await confirm({
@@ -254,8 +287,8 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
               >
                 Clear Itinerary
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -356,20 +389,41 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                   </p>
                 </div>
               </button>
-            {!readOnly && (
-              <button
-                onClick={() => {
-                  setSelectedDay(day);
-                  setShowEventForm(true);
-                }}
-                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-blue-300 bg-blue-900/40 hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500"
-              >
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Event
-              </button>
-            )}
+            <div className="flex gap-2 items-center flex-shrink-0">
+              {(() => {
+                const sorted = [...day.events].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+                const routeUrl = getDayRouteUrl(sorted);
+                return routeUrl ? (
+                  <a
+                    href={routeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-emerald-300 bg-emerald-900/40 hover:bg-emerald-900/60"
+                    title="View day's route on Google Maps"
+                    aria-label="View route on map"
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                    Route
+                  </a>
+                ) : null;
+              })()}
+              {!readOnly && (
+                <button
+                  onClick={() => {
+                    setSelectedDay(day);
+                    setShowEventForm(true);
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-blue-300 bg-blue-900/40 hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Event
+                </button>
+              )}
+            </div>
           </div>
 
           {isExpanded && (
@@ -378,13 +432,28 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                 <p className="text-slate-400 text-center py-8">No events scheduled for this day</p>
               ) : (
                 <div className="space-y-4">
-              {[...filteredEvents]
-                .sort((a, b) => {
-                  // Sort events by start time
-                  return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
-                })
-                .map((event) => (
-                <div key={event.id} className="border-l-4 border-blue-500 pl-4 py-2">
+              {(() => {
+                const sorted = [...filteredEvents].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+                return sorted.map((event, idx) => (
+                <div key={event.id}>
+                {/* Direction link from previous event */}
+                {idx > 0 && hasLocation(sorted[idx - 1]) && hasLocation(event) && (
+                  <a
+                    href={mapsService.generateDirectionsUrl(sorted[idx - 1].location, event.location)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 py-1.5 px-4 -mx-0 mb-2 text-xs text-slate-400 hover:text-blue-400 transition-colors group"
+                    title={`Directions: ${sorted[idx - 1].location.name} → ${event.location.name}`}
+                  >
+                    <svg className="w-3.5 h-3.5 flex-shrink-0 text-slate-500 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                    <span className="border-b border-dashed border-slate-600 group-hover:border-blue-400">
+                      Get directions to {event.location.name}
+                    </span>
+                  </a>
+                )}
+                <div className="border-l-4 border-blue-500 pl-4 py-2">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -474,7 +543,9 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                     )}
                   </div>
                 </div>
-                ))}
+                </div>
+                ));
+              })()}
                 </div>
               )}
             </>
