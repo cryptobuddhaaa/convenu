@@ -995,8 +995,11 @@ async function handleItineraryView(
     return;
   }
 
-  // action is an itinerary ID
-  const itineraryId = action;
+  // Check if action is "itineraryId:date" (specific day selected)
+  const colonIdx = action.indexOf(':');
+  const itineraryId = colonIdx > 0 ? action.substring(0, colonIdx) : action;
+  const selectedDate = colonIdx > 0 ? action.substring(colonIdx + 1) : null;
+
   const { data: itinerary } = await supabase
     .from('itineraries')
     .select('id, title, start_date, end_date, location, data')
@@ -1011,42 +1014,121 @@ async function handleItineraryView(
 
   const itData = itinerary.data as { days?: Array<{ date: string; events?: Array<Record<string, unknown>> }> };
   const days = itData.days || [];
-  const allEvents: ParsedEvent[] = [];
+  const startFmt = new Date(itinerary.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const endFmt = new Date(itinerary.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-  for (const day of days) {
-    for (const ev of day.events || []) {
-      allEvents.push({
-        title: ev.title as string || 'Untitled',
-        startTime: ev.startTime as string || '',
-        endTime: ev.endTime as string || '',
-        location: ev.location as ParsedEvent['location'],
-        lumaEventUrl: ev.lumaEventUrl as string | undefined,
-        eventType: ev.eventType as string | undefined,
-        dayDate: day.date,
-        itineraryTitle: itinerary.title,
-      });
+  // "all" — show every event across all days
+  if (selectedDate === 'all') {
+    const allEvents: ParsedEvent[] = [];
+    for (const day of days) {
+      for (const ev of day.events || []) {
+        allEvents.push({
+          title: ev.title as string || 'Untitled',
+          startTime: ev.startTime as string || '',
+          endTime: ev.endTime as string || '',
+          location: ev.location as ParsedEvent['location'],
+          lumaEventUrl: ev.lumaEventUrl as string | undefined,
+          eventType: ev.eventType as string | undefined,
+          dayDate: day.date,
+          itineraryTitle: itinerary.title,
+        });
+      }
     }
+
+    let message = `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location} · ${startFmt} – ${endFmt}\n${allEvents.length} event${allEvents.length !== 1 ? 's' : ''}\n\n`;
+    message += formatEventList(allEvents);
+
+    await sendMessage(chatId, message, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '◀️ Back to dates', callback_data: `iv:${itineraryId}` }],
+          [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+        ],
+      },
+    });
+    return;
   }
 
-  if (allEvents.length === 0) {
+  // If a specific date was selected, show events for that date
+  if (selectedDate) {
+    const day = days.find((d) => d.date === selectedDate);
+    const dayEvents: ParsedEvent[] = [];
+    if (day) {
+      for (const ev of day.events || []) {
+        dayEvents.push({
+          title: ev.title as string || 'Untitled',
+          startTime: ev.startTime as string || '',
+          endTime: ev.endTime as string || '',
+          location: ev.location as ParsedEvent['location'],
+          lumaEventUrl: ev.lumaEventUrl as string | undefined,
+          eventType: ev.eventType as string | undefined,
+          dayDate: day.date,
+          itineraryTitle: itinerary.title,
+        });
+      }
+    }
+
+    const dateFmt = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+    if (dayEvents.length === 0) {
+      await sendMessage(chatId, `📅 <b>${itinerary.title}</b>\n📆 ${dateFmt}\n\nNo events on this day.`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '◀️ Back to dates', callback_data: `iv:${itineraryId}` }],
+          ],
+        },
+      });
+      return;
+    }
+
+    let message = `📅 <b>${itinerary.title}</b>\n📆 ${dateFmt}\n${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}\n\n`;
+    message += formatEventList(dayEvents);
+
+    await sendMessage(chatId, message, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '◀️ Back to dates', callback_data: `iv:${itineraryId}` }],
+          [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+        ],
+      },
+    });
+    return;
+  }
+
+  // No date selected — show date picker for this itinerary
+  const totalEvents = days.reduce((sum, d) => sum + (d.events?.length || 0), 0);
+
+  if (totalEvents === 0) {
     await sendMessage(chatId,
-      `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location}\n${itinerary.start_date} → ${itinerary.end_date}\n\nNo events yet. Add events with /newevent.`
+      `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location}\n${startFmt} – ${endFmt}\n\nNo events yet. Add events with /newevent.`
     );
     return;
   }
 
-  const startFmt = new Date(itinerary.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const endFmt = new Date(itinerary.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  let message = `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location} · ${startFmt} – ${endFmt}\n${allEvents.length} event${allEvents.length !== 1 ? 's' : ''}\n\n`;
+  let message = `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location} · ${startFmt} – ${endFmt}\n${totalEvents} event${totalEvents !== 1 ? 's' : ''}\n\nSelect a date to see its events:`;
 
-  message += formatEventList(allEvents);
+  // Build date buttons — 2 per row
+  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  for (let i = 0; i < days.length; i += 2) {
+    const row: Array<{ text: string; callback_data: string }> = [];
+    for (let j = i; j < i + 2 && j < days.length; j++) {
+      const d = days[j];
+      const eventCount = d.events?.length || 0;
+      const dateFmt = new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const isToday = d.date === todayStr;
+      const label = `${isToday ? '📍 ' : ''}${dateFmt} (${eventCount})`;
+      row.push({ text: label, callback_data: `iv:${itineraryId}:${d.date}` });
+    }
+    keyboard.push(row);
+  }
+
+  keyboard.push([{ text: '📋 Show all events', callback_data: `iv:${itineraryId}:all` }]);
+  keyboard.push([{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }]);
 
   await sendMessage(chatId, message, {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
-      ],
-    },
+    reply_markup: { inline_keyboard: keyboard },
   });
 }
 
@@ -1111,6 +1193,7 @@ function formatEventList(events: ParsedEvent[]): string {
   for (const ev of events) {
     // Date header (for multi-day itinerary view)
     if (ev.dayDate !== currentDate) {
+      if (currentDate) message += '\n'; // blank line between date sections
       currentDate = ev.dayDate;
       const dateFmt = new Date(ev.dayDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       message += `<b>— ${dateFmt} —</b>\n`;
