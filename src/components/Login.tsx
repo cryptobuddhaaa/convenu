@@ -7,6 +7,7 @@ export default function Login() {
     <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="text-center">
+          <img src="/logo.svg" alt="Logo" className="mx-auto w-24 h-24 mb-4" />
           <h1 className="text-4xl font-bold text-white">Itinerary & Contact Manager</h1>
           <p className="mt-2 text-sm text-slate-400">All in one trip planning and networking tool</p>
         </div>

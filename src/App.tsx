@@ -135,14 +135,17 @@ function App() {
         <header className="bg-slate-800 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6 sm:px-6 lg:px-8">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-              <div className="flex-shrink-0">
-                <h1 className="text-2xl sm:text-3xl font-bold text-white">Shared Itinerary</h1>
-                <p className="text-sm text-slate-300 mt-1">{sharedItinerary.title}</p>
-                {sharedItinerary.createdByName && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    Shared by {sharedItinerary.createdByName}
-                  </p>
-                )}
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <img src="/logo.svg" alt="Logo" className="w-10 h-10 sm:w-12 sm:h-12" />
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-white">Shared Itinerary</h1>
+                  <p className="text-sm text-slate-300 mt-1">{sharedItinerary.title}</p>
+                  {sharedItinerary.createdByName && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      Shared by {sharedItinerary.createdByName}
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4">
                 {user ? (
@@ -212,9 +215,12 @@ function App() {
       <header className="bg-slate-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-            <div className="flex-shrink-0">
-              <h1 className="text-2xl sm:text-3xl font-bold text-white">Itinerary & Contact Manager</h1>
-              <p className="text-xs sm:text-sm text-slate-400 mt-1">All in one trip planning and networking tool</p>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <img src="/logo.svg" alt="Logo" className="w-10 h-10 sm:w-12 sm:h-12" />
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white">Itinerary & Contact Manager</h1>
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">All in one trip planning and networking tool</p>
+              </div>
             </div>
             <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4">
               {itinerary && (
