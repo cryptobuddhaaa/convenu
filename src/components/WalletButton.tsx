@@ -8,6 +8,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useUserWallet } from '../hooks/useUserWallet';
 import { useAuth } from '../hooks/useAuth';
+import type { UserWallet } from '../models/types';
 import { toast } from './Toast';
 import bs58 from 'bs58';
 
@@ -29,7 +30,7 @@ export function WalletButton() {
     if (existing?.verifiedAt) return;
 
     // Link wallet to DB if not already
-    let linked = existing;
+    let linked: UserWallet | undefined | null = existing;
     if (!linked) {
       try {
         linked = await linkWallet(user.id, walletAddress);
