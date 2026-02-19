@@ -62,21 +62,46 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
   initialize: async (userId: string) => {
     set({ loading: true });
     try {
-      const { data, error } = await supabase
+      // Fetch handshakes where user is initiator or already-claimed receiver
+      const { data: ownData, error: ownError } = await supabase
         .from('handshakes')
         .select('*')
         .or(`initiator_user_id.eq.${userId},receiver_user_id.eq.${userId}`)
         .in('status', ['pending', 'matched', 'minted'])
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error loading handshakes:', error);
+      if (ownError) {
+        console.error('Error loading handshakes:', ownError);
         set({ handshakes: [], loading: false, initialized: true });
         return;
       }
 
+      // Also fetch pending handshakes where user is the RECEIVER by identifier
+      // (receiver_user_id is NULL until claimed, so RLS blocks the client query)
+      let pendingForMe: Record<string, unknown>[] = [];
+      try {
+        const response = await fetch(`/api/handshake/pending?userId=${userId}`);
+        if (response.ok) {
+          const result = await response.json();
+          pendingForMe = result.handshakes || [];
+        }
+      } catch {
+        // Non-critical — just means receiver won't see pending handshakes
+        console.warn('Failed to fetch pending handshakes for receiver');
+      }
+
+      // Merge and deduplicate by ID
+      const allRows = [...(ownData || []), ...pendingForMe];
+      const seen = new Set<string>();
+      const unique = allRows.filter((row) => {
+        const id = row.id as string;
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+
       set({
-        handshakes: (data || []).map(mapRowToHandshake),
+        handshakes: unique.map(mapRowToHandshake),
         loading: false,
         initialized: true,
       });
