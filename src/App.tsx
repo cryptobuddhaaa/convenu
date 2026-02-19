@@ -218,6 +218,7 @@ function App() {
         onDone={() => {
           setClaimHandshakeId(null);
           window.history.replaceState({}, '', window.location.pathname);
+          setActiveTab('dashboard');
           // Re-fetch handshakes so Dashboard shows the updated state
           if (user) initializeHandshakes(user.id);
         }}}
