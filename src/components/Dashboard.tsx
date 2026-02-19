@@ -193,6 +193,13 @@ export default function Dashboard() {
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {handshakes.slice(0, 8).map((h) => {
                   const isReceiverPending = (h.status === 'pending' || h.status === 'claimed') && h.initiatorUserId !== user?.id;
+                  const nftSig = h.status === 'minted'
+                    ? (h.initiatorUserId === user?.id ? h.initiatorNftAddress : h.receiverNftAddress)
+                    : null;
+                  const cluster = (import.meta.env.VITE_SOLANA_NETWORK as string) || 'devnet';
+                  const explorerUrl = nftSig
+                    ? `https://explorer.solana.com/tx/${nftSig}${cluster !== 'mainnet-beta' ? `?cluster=${cluster}` : ''}`
+                    : null;
                   return (
                     <div key={h.id} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2 min-w-0">
@@ -214,6 +221,20 @@ export default function Dashboard() {
                           >
                             Claim
                           </button>
+                        )}
+                        {explorerUrl && (
+                          <a
+                            href={explorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-green-400 hover:text-green-300 hover:underline text-xs whitespace-nowrap flex items-center gap-0.5"
+                            title="View NFT on Solana Explorer"
+                          >
+                            NFT
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
                         )}
                         <span className="text-slate-500 text-xs whitespace-nowrap">
                           {new Date(h.createdAt).toLocaleDateString()}

@@ -46,12 +46,37 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
 
   if (existingHandshake) {
     const info = getStatusInfo(existingHandshake);
+    const nftSig = existingHandshake.status === 'minted'
+      ? (existingHandshake.initiatorUserId === userId
+          ? existingHandshake.initiatorNftAddress
+          : existingHandshake.receiverNftAddress)
+      : null;
+    const cluster = (import.meta.env.VITE_SOLANA_NETWORK as string) || 'devnet';
+    const explorerUrl = nftSig
+      ? `https://explorer.solana.com/tx/${nftSig}${cluster !== 'mainnet-beta' ? `?cluster=${cluster}` : ''}`
+      : null;
+
     return (
       <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border ${info.bgColor}`}>
         <svg className={`w-3.5 h-3.5 ${info.color}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <span className={info.color}>{info.label}</span>
+        {explorerUrl ? (
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-green-400 hover:text-green-300 hover:underline flex items-center gap-1"
+            title="View NFT on Solana Explorer"
+          >
+            Minted
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        ) : (
+          <span className={info.color}>{info.label}</span>
+        )}
         {existingHandshake.pointsAwarded > 0 && (
           <span className="text-green-400 ml-1">+{existingHandshake.pointsAwarded}pts</span>
         )}
