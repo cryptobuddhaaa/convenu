@@ -196,7 +196,9 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2 min-w-0">
                       <StatusDot status={h.status} />
                       <span className="text-slate-300 truncate">
-                        {h.eventTitle || h.receiverIdentifier || 'Handshake'}
+                        {h.initiatorName && h.initiatorUserId !== user?.id
+                          ? `From ${h.initiatorName}`
+                          : h.eventTitle || h.receiverIdentifier || 'Handshake'}
                       </span>
                     </div>
                     <span className="text-slate-500 text-xs whitespace-nowrap ml-2">

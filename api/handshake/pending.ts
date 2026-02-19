@@ -63,7 +63,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Failed to fetch pending handshakes' });
     }
 
-    return res.status(200).json({ handshakes: data || [] });
+    // Resolve initiator names so the receiver knows who sent each handshake
+    const handshakes = data || [];
+    const initiatorIds = [...new Set(handshakes.map((h) => h.initiator_user_id))];
+
+    const nameMap: Record<string, string> = {};
+    for (const uid of initiatorIds) {
+      const { data: initiator } = await supabase.auth.admin.getUserById(uid);
+      if (initiator?.user) {
+        nameMap[uid] =
+          initiator.user.user_metadata?.full_name ||
+          initiator.user.email?.split('@')[0] ||
+          'Someone';
+      }
+    }
+
+    const enriched = handshakes.map((h) => ({
+      ...h,
+      initiator_name: nameMap[h.initiator_user_id] || 'Someone',
+    }));
+
+    return res.status(200).json({ handshakes: enriched });
   } catch (error) {
     console.error('Pending handshakes error:', error);
     return res.status(500).json({ error: 'Failed to fetch pending handshakes' });

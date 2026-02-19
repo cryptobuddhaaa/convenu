@@ -51,6 +51,7 @@ function mapRowToHandshake(row: Record<string, unknown>): Handshake {
     mintFeeLamports: (row.mint_fee_lamports as number) || 0,
     createdAt: row.created_at as string,
     expiresAt: row.expires_at as string,
+    ...(row.initiator_name ? { initiatorName: row.initiator_name as string } : {}),
   };
 }
 
