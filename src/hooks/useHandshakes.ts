@@ -68,7 +68,7 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
         .from('handshakes')
         .select('*')
         .or(`initiator_user_id.eq.${userId},receiver_user_id.eq.${userId}`)
-        .in('status', ['pending', 'matched', 'minted'])
+        .in('status', ['pending', 'claimed', 'matched', 'minted'])
         .order('created_at', { ascending: false });
 
       if (ownError) {

@@ -121,7 +121,7 @@ export interface UserWallet {
   createdAt: string;
 }
 
-export type HandshakeStatus = 'pending' | 'matched' | 'minted' | 'expired';
+export type HandshakeStatus = 'pending' | 'claimed' | 'matched' | 'minted' | 'expired';
 
 export interface Handshake {
   id: string;

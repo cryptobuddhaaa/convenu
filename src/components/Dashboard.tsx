@@ -117,7 +117,7 @@ export default function Dashboard() {
     loadData();
   }, [user]);
 
-  const pendingHandshakes = handshakes.filter((h) => h.status === 'pending');
+  const pendingHandshakes = handshakes.filter((h) => h.status === 'pending' || h.status === 'claimed');
   const matchedHandshakes = handshakes.filter((h) => h.status === 'matched');
   const mintedHandshakes = handshakes.filter((h) => h.status === 'minted');
 
@@ -192,7 +192,7 @@ export default function Dashboard() {
               <h4 className="text-sm font-medium text-slate-400 mb-2">Recent</h4>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {handshakes.slice(0, 8).map((h) => {
-                  const isReceiverPending = h.status === 'pending' && h.initiatorUserId !== user?.id;
+                  const isReceiverPending = (h.status === 'pending' || h.status === 'claimed') && h.initiatorUserId !== user?.id;
                   return (
                     <div key={h.id} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2 min-w-0">
@@ -320,6 +320,7 @@ function HandshakeStatRow({ label, count, color }: { label: string; count: numbe
 function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
     pending: 'bg-yellow-400',
+    claimed: 'bg-orange-400',
     matched: 'bg-blue-400',
     minted: 'bg-green-400',
     expired: 'bg-red-400',

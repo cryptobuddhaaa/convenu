@@ -63,7 +63,7 @@ async function handleInitiate(req: VercelRequest, res: VercelResponse) {
       .select('id, status')
       .eq('initiator_user_id', userId)
       .eq('contact_id', contactId)
-      .in('status', ['pending', 'matched', 'minted'])
+      .in('status', ['pending', 'claimed', 'matched', 'minted'])
       .single();
 
     if (existing) {
@@ -159,7 +159,10 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: 'Handshake not found' });
     }
 
-    if (handshake.status !== 'pending') {
+    // Allow re-claim if receiver backed out before paying (status still 'claimed')
+    if (handshake.status === 'claimed' && handshake.receiver_user_id === userId) {
+      // Re-claim is fine — just rebuild the transaction below
+    } else if (handshake.status !== 'pending') {
       return res.status(409).json({
         error: `Handshake is already ${handshake.status}`,
         status: handshake.status,
@@ -197,12 +200,14 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'You are not the intended receiver of this handshake' });
     }
 
+    // Mark as 'claimed' — NOT 'matched'. Status upgrades to 'matched' only
+    // after the receiver's payment is confirmed in handleConfirmTx.
     await supabase
       .from('handshakes')
       .update({
         receiver_user_id: userId,
         receiver_wallet: walletAddress,
-        status: 'matched',
+        status: 'claimed',
       })
       .eq('id', handshakeId);
 
@@ -230,7 +235,7 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       handshakeId,
-      status: 'matched',
+      status: 'claimed',
       transaction: Buffer.from(serialized).toString('base64'),
       initiatorName: handshake.event_title
         ? `Handshake from ${handshake.event_title}`
@@ -293,6 +298,8 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
     } else {
       updateFields.receiver_tx_signature = txSignature;
       updateFields.receiver_minted_at = now;
+      // Receiver payment confirmed — now upgrade from 'claimed' to 'matched'
+      updateFields.status = 'matched';
     }
 
     await supabase
