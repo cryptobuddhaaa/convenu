@@ -31,7 +31,6 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
   const [claimData, setClaimData] = useState<ClaimData | null>(null);
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
-  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const verifyAttempted = useRef(false);
@@ -45,7 +44,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
     verifyAttempted.current = true;
 
     const autoVerify = async () => {
-      setVerifying(true);
+
       try {
         const walletAddress = publicKey.toBase58();
         const linked = await linkWallet(user.id, walletAddress);
@@ -82,7 +81,6 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
           setError(msg);
         }
       } finally {
-        setVerifying(false);
       }
     };
 
