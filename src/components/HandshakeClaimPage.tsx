@@ -151,15 +151,29 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
 
       // If both sides have paid, trigger minting
       if (result.bothPaid) {
-        await fetch('/api/handshake?action=mint', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ handshakeId: claimData.handshakeId }),
-        });
+        try {
+          const mintResponse = await fetch('/api/handshake?action=mint', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ handshakeId: claimData.handshakeId }),
+          });
+
+          if (!mintResponse.ok) {
+            const mintErr = await mintResponse.json().catch(() => ({}));
+            console.error('Mint failed:', mintErr);
+            toast.error(mintErr.error || 'NFT minting failed. It can be retried later.');
+          } else {
+            toast.success('Handshake confirmed and NFT minted!');
+          }
+        } catch (mintErr) {
+          console.error('Mint network error:', mintErr);
+          toast.error('NFT minting failed due to a network error.');
+        }
+      } else {
+        toast.success('Handshake payment confirmed!');
       }
 
       setSuccess(true);
-      toast.success('Handshake confirmed! NFT minting in progress.');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to sign';
       if (message.includes('User rejected')) {

@@ -181,7 +181,7 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
 
   getByContactId: (contactId: string) => {
     return get().handshakes.find(
-      (h) => h.contactId === contactId && ['pending', 'matched', 'minted'].includes(h.status)
+      (h) => h.contactId === contactId && ['pending', 'claimed', 'matched', 'minted'].includes(h.status)
     );
   },
 
