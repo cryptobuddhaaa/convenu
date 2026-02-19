@@ -64,13 +64,15 @@ async function main() {
   console.log(`\nCreating Merkle tree: ${merkleTree.publicKey}`);
   console.log('Config: maxDepth=14, maxBufferSize=64 (supports ~16,384 cNFTs)');
 
-  const tx = await createTree(umi, {
+  const builder = await createTree(umi, {
     merkleTree,
     maxDepth: 14,
     maxBufferSize: 64,
-  }).sendAndConfirm(umi);
+  });
 
-  const txSig = base58.deserialize(tx.signature)[0];
+  const { signature } = await builder.sendAndConfirm(umi);
+
+  const txSig = base58.deserialize(signature)[0];
   console.log(`\nTree created! Tx: ${txSig}`);
 
   const authorityBase58 = base58.deserialize(secretKeyBytes)[0];
