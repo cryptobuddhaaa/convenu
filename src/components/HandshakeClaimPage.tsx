@@ -25,15 +25,60 @@ interface HandshakeClaimPageProps {
 
 export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPageProps) {
   const { user } = useAuth();
-  const { connected, signTransaction } = useWallet();
-  const { getPrimaryWallet } = useUserWallet();
+  const { connected, publicKey, signTransaction, signMessage } = useWallet();
+  const { getPrimaryWallet, linkWallet, verifyWallet } = useUserWallet();
   const [claimData, setClaimData] = useState<ClaimData | null>(null);
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const wallet = getPrimaryWallet();
+
+  // Auto-link and verify wallet when connected but not yet verified
+  useEffect(() => {
+    if (!user || !connected || !publicKey || !signMessage || wallet || verifying) return;
+
+    const autoVerify = async () => {
+      setVerifying(true);
+      try {
+        const walletAddress = publicKey.toBase58();
+        const linked = await linkWallet(user.id, walletAddress);
+        if (!linked) {
+          setError('Failed to link wallet. Please try again.');
+          return;
+        }
+
+        if (linked.verifiedAt) {
+          // Already verified from a previous session
+          return;
+        }
+
+        // Sign a verification message
+        const message = `Verify wallet ${walletAddress} for Shareable Itinerary at ${Date.now()}`;
+        const encodedMessage = new TextEncoder().encode(message);
+        const signatureBytes = await signMessage(encodedMessage);
+        const signature = btoa(String.fromCharCode(...signatureBytes));
+
+        const verified = await verifyWallet(linked.id, signature, message, walletAddress);
+        if (!verified) {
+          setError('Wallet verification failed. Please try again.');
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to verify wallet';
+        if (msg.includes('User rejected')) {
+          toast.info('Wallet verification cancelled. Please approve the signature to continue.');
+        } else {
+          setError(msg);
+        }
+      } finally {
+        setVerifying(false);
+      }
+    };
+
+    autoVerify();
+  }, [user, connected, publicKey, signMessage, wallet, verifying, linkWallet, verifyWallet]);
 
   // Step 1: Claim the handshake (get transaction to sign)
   useEffect(() => {
@@ -150,10 +195,14 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
           </div>
         )}
 
-        {user && connected && !wallet && (
+        {user && connected && !wallet && !error && (
           <div className="text-center">
-            <p className="text-slate-300 mb-4">Verify your wallet to claim this handshake.</p>
-            <p className="text-slate-400 text-sm">Your wallet needs to be linked and verified in your account settings.</p>
+            <svg className="w-8 h-8 animate-spin mx-auto text-purple-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-slate-400 mt-2">Verifying wallet...</p>
+            <p className="text-slate-500 text-xs mt-1">Please approve the signature request in your wallet.</p>
           </div>
         )}
 

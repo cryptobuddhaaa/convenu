@@ -25,6 +25,7 @@ interface HandshakeState {
   } | null>;
   mint: (handshakeId: string) => Promise<boolean>;
   getByContactId: (contactId: string) => Handshake | undefined;
+  getByIdentifier: (identifier: string) => Handshake | undefined;
   reset: () => void;
 }
 
@@ -180,6 +181,16 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
   getByContactId: (contactId: string) => {
     return get().handshakes.find(
       (h) => h.contactId === contactId && ['pending', 'matched', 'minted'].includes(h.status)
+    );
+  },
+
+  getByIdentifier: (identifier: string) => {
+    if (!identifier) return undefined;
+    const normalized = identifier.replace('@', '').toLowerCase();
+    return get().handshakes.find(
+      (h) =>
+        ['pending', 'claimed', 'matched', 'minted'].includes(h.status) &&
+        h.receiverIdentifier?.replace('@', '').toLowerCase() === normalized
     );
   },
 

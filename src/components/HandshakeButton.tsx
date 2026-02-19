@@ -20,10 +20,12 @@ interface HandshakeButtonProps {
 export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
   const { signTransaction } = useWallet();
   const { getPrimaryWallet } = useUserWallet();
-  const { initiate, confirmTx, getByContactId } = useHandshakes();
+  const { initiate, confirmTx, getByContactId, getByIdentifier } = useHandshakes();
   const [loading, setLoading] = useState(false);
 
-  const existingHandshake = getByContactId(contact.id);
+  const existingHandshake = getByContactId(contact.id)
+    || getByIdentifier(contact.telegramHandle || '')
+    || getByIdentifier(contact.email || '');
   const wallet = getPrimaryWallet();
 
   // Don't show if contact has no telegram/email (can't claim)
