@@ -307,6 +307,38 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
       .update(updateFields)
       .eq('id', handshakeId);
 
+    // When receiver pays, auto-add the initiator to the receiver's contacts
+    if (side === 'receiver' && handshake.receiver_user_id && handshake.initiator_user_id) {
+      try {
+        const { data: initiatorUser } = await supabase.auth.admin.getUserById(handshake.initiator_user_id);
+        const { data: initiatorTelegram } = await supabase
+          .from('telegram_links')
+          .select('telegram_username')
+          .eq('user_id', handshake.initiator_user_id)
+          .single();
+
+        const fullName = initiatorUser?.user?.user_metadata?.full_name || '';
+        const nameParts = fullName.split(' ');
+        const firstName = nameParts[0] || initiatorUser?.user?.email?.split('@')[0] || 'Unknown';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
+        await supabase.from('contacts').insert({
+          user_id: handshake.receiver_user_id,
+          first_name: firstName,
+          last_name: lastName,
+          telegram_handle: initiatorTelegram?.telegram_username || null,
+          email: initiatorUser?.user?.email || null,
+          event_title: handshake.event_title || 'Handshake',
+          event_id: handshake.event_id || null,
+          itinerary_id: null,
+          date_met: handshake.event_date || new Date().toISOString().split('T')[0],
+        });
+      } catch (contactErr) {
+        // Non-critical — don't fail the handshake if contact creation fails
+        console.error('Failed to auto-add contact for receiver:', contactErr);
+      }
+    }
+
     const { data: updated } = await supabase
       .from('handshakes')
       .select('initiator_tx_signature, receiver_tx_signature, status')
