@@ -3,10 +3,11 @@
  * URL pattern: ?claim=<handshakeId>
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Transaction } from '@solana/web3.js';
+import bs58 from 'bs58';
 import { useAuth } from '../hooks/useAuth';
 import { useUserWallet } from '../hooks/useUserWallet';
 import { toast } from './Toast';
@@ -33,12 +34,15 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const verifyAttempted = useRef(false);
 
   const wallet = getPrimaryWallet();
 
   // Auto-link and verify wallet when connected but not yet verified
   useEffect(() => {
-    if (!user || !connected || !publicKey || !signMessage || wallet || verifying) return;
+    if (!user || !connected || !publicKey || !signMessage || wallet || verifyAttempted.current) return;
+
+    verifyAttempted.current = true;
 
     const autoVerify = async () => {
       setVerifying(true);
@@ -55,13 +59,18 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
           return;
         }
 
-        // Sign a verification message
-        const message = `Verify wallet ${walletAddress} for Shareable Itinerary at ${Date.now()}`;
+        if (typeof signMessage !== 'function') {
+          setError('Wallet does not support message signing. Please use Phantom.');
+          return;
+        }
+
+        // Match the exact format the verify API expects
+        const message = `Verify wallet ownership for Shareable Itinerary\n\nUser: ${user.id}\nTimestamp: ${Date.now()}`;
         const encodedMessage = new TextEncoder().encode(message);
         const signatureBytes = await signMessage(encodedMessage);
-        const signature = btoa(String.fromCharCode(...signatureBytes));
+        const signatureBase58 = bs58.encode(signatureBytes);
 
-        const verified = await verifyWallet(linked.id, signature, message, walletAddress);
+        const verified = await verifyWallet(linked.id, signatureBase58, message, walletAddress);
         if (!verified) {
           setError('Wallet verification failed. Please try again.');
         }
@@ -78,7 +87,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
     };
 
     autoVerify();
-  }, [user, connected, publicKey, signMessage, wallet, verifying, linkWallet, verifyWallet]);
+  }, [user, connected, publicKey, signMessage, wallet, linkWallet, verifyWallet]);
 
   // Step 1: Claim the handshake (get transaction to sign)
   useEffect(() => {
