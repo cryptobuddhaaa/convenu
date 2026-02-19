@@ -155,12 +155,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Step 3: Merge all events, deduplicate by event ID
     const seenIds = new Set<string>();
     const allEvents: GoogleCalendarItem[] = [];
-    const calendarSources: string[] = [];
 
-    for (const { calendarName, events } of eventsByCalendar) {
-      if (events.length > 0) {
-        calendarSources.push(`${calendarName} (${events.length})`);
-      }
+    for (const { events } of eventsByCalendar) {
       for (const event of events) {
         if (!seenIds.has(event.id)) {
           seenIds.add(event.id);

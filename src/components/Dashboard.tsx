@@ -85,33 +85,34 @@ export default function Dashboard() {
 
     const loadData = async () => {
       setLoading(true);
+      try {
+        const { data: trustData } = await supabase
+          .from('trust_scores')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
 
-      // Load trust score
-      const { data: trustData } = await supabase
-        .from('trust_scores')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+        if (trustData) {
+          setTrustScore(mapRowToTrust(trustData));
+        }
 
-      if (trustData) {
-        setTrustScore(mapRowToTrust(trustData));
+        const { data: pointsData } = await supabase
+          .from('user_points')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (pointsData) {
+          const entries = pointsData.map(mapRowToPoint);
+          setPointEntries(entries);
+          setTotalPoints(entries.reduce((sum, e) => sum + e.points, 0));
+        }
+      } catch (err) {
+        console.error('Failed to load dashboard data:', err);
+      } finally {
+        setLoading(false);
       }
-
-      // Load point entries
-      const { data: pointsData } = await supabase
-        .from('user_points')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (pointsData) {
-        const entries = pointsData.map(mapRowToPoint);
-        setPointEntries(entries);
-        setTotalPoints(entries.reduce((sum, e) => sum + e.points, 0));
-      }
-
-      setLoading(false);
     };
 
     loadData();

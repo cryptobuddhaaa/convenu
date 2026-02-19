@@ -372,9 +372,10 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 py-8 pb-20 sm:pb-8 sm:px-6 lg:px-8">
           <div>
             <div className="mb-6 -mx-4 sm:mx-0 hidden sm:block">
-              <nav className="flex space-x-4 border-b border-slate-700 overflow-x-auto scrollbar-hide">
+              <nav aria-label="Main navigation" className="flex space-x-4 border-b border-slate-700 overflow-x-auto scrollbar-hide">
                 <button
                   onClick={() => setActiveTab('itinerary')}
+                  aria-current={activeTab === 'itinerary' ? 'page' : undefined}
                   className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
                     activeTab === 'itinerary'
                       ? 'border-blue-500 text-blue-400'
@@ -385,6 +386,7 @@ function App() {
                 </button>
                 <button
                   onClick={() => setActiveTab('shared')}
+                  aria-current={activeTab === 'shared' ? 'page' : undefined}
                   className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
                     activeTab === 'shared'
                       ? 'border-blue-500 text-blue-400'
@@ -401,6 +403,7 @@ function App() {
                 </button>
                 <button
                   onClick={() => setActiveTab('contacts')}
+                  aria-current={activeTab === 'contacts' ? 'page' : undefined}
                   className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
                     activeTab === 'contacts'
                       ? 'border-blue-500 text-blue-400'
@@ -411,6 +414,7 @@ function App() {
                 </button>
                 <button
                   onClick={() => setActiveTab('dashboard')}
+                  aria-current={activeTab === 'dashboard' ? 'page' : undefined}
                   className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
                     activeTab === 'dashboard'
                       ? 'border-blue-500 text-blue-400'
@@ -585,10 +589,11 @@ function App() {
       </main>
 
       {/* Mobile bottom navigation */}
-        <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-40">
+        <nav aria-label="Mobile navigation" className="sm:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-40">
           <div className="flex justify-around">
             <button
               onClick={() => setActiveTab('itinerary')}
+              aria-current={activeTab === 'itinerary' ? 'page' : undefined}
               className={`flex-1 flex flex-col items-center py-2 text-xs ${
                 activeTab === 'itinerary' ? 'text-blue-400' : 'text-slate-400'
               }`}
@@ -600,6 +605,7 @@ function App() {
             </button>
             <button
               onClick={() => setActiveTab('shared')}
+              aria-current={activeTab === 'shared' ? 'page' : undefined}
               className={`flex-1 flex flex-col items-center py-2 text-xs relative ${
                 activeTab === 'shared' ? 'text-blue-400' : 'text-slate-400'
               }`}
@@ -616,6 +622,7 @@ function App() {
             </button>
             <button
               onClick={() => setActiveTab('contacts')}
+              aria-current={activeTab === 'contacts' ? 'page' : undefined}
               className={`flex-1 flex flex-col items-center py-2 text-xs ${
                 activeTab === 'contacts' ? 'text-blue-400' : 'text-slate-400'
               }`}
@@ -627,6 +634,7 @@ function App() {
             </button>
             <button
               onClick={() => setActiveTab('dashboard')}
+              aria-current={activeTab === 'dashboard' ? 'page' : undefined}
               className={`flex-1 flex flex-col items-center py-2 text-xs ${
                 activeTab === 'dashboard' ? 'text-blue-400' : 'text-slate-400'
               }`}

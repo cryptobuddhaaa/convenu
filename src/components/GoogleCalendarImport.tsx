@@ -201,11 +201,11 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
 
       {/* Event Preview Modal */}
       {showPreview && lumaEvents.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="gcal-import-title">
           <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-700">
-              <h2 className="text-xl font-semibold text-white">
+              <h2 id="gcal-import-title" className="text-xl font-semibold text-white">
                 Import Luma Events ({selectedEvents.size} selected)
               </h2>
               <p className="text-sm text-slate-400 mt-1">

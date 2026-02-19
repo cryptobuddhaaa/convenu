@@ -9,6 +9,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { Transaction } from '@solana/web3.js';
 import { useHandshakes } from '../hooks/useHandshakes';
 import { useUserWallet } from '../hooks/useUserWallet';
+import { HANDSHAKE_FEE_SOL, POINTS_PER_HANDSHAKE } from '../lib/constants';
 import { toast } from './Toast';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 import type { Contact, Handshake } from '../models/types';
@@ -111,7 +112,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
     if (!isStuckPending) {
       const confirmed = await confirm({
         title: 'Send Proof of Handshake?',
-        message: `This will send a handshake request to ${contact.firstName} ${contact.lastName}. You'll pay 0.01 SOL to confirm your connection. When they accept and pay 0.01 SOL, you'll both receive a soulbound NFT as proof and earn 10 points.`,
+        message: `This will send a handshake request to ${contact.firstName} ${contact.lastName}. You'll pay ${HANDSHAKE_FEE_SOL} SOL to confirm your connection. When they accept and pay ${HANDSHAKE_FEE_SOL} SOL, you'll both receive a soulbound NFT as proof and earn ${POINTS_PER_HANDSHAKE} points.`,
         confirmLabel: 'Send Handshake',
         variant: 'default',
       });
@@ -170,7 +171,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
             ? 'bg-purple-900/30 border-purple-700/50 text-purple-300 hover:bg-purple-900/50 hover:text-purple-200'
             : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
         }`}
-        title={wallet ? `Send handshake to ${contact.firstName} (0.01 SOL)` : 'Connect wallet first'}
+        title={wallet ? `Send handshake to ${contact.firstName} (${HANDSHAKE_FEE_SOL} SOL)` : 'Connect wallet first'}
         aria-label={`Send handshake to ${contact.firstName} ${contact.lastName}`}
       >
         {loading ? (

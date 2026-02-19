@@ -118,11 +118,11 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
   );
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="share-dialog-title">
       <div className="bg-slate-800 rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-white">Share Itinerary</h3>
+            <h3 id="share-dialog-title" className="text-lg font-semibold text-white">Share Itinerary</h3>
             <p className="text-sm text-slate-300 mt-1">{itinerary.title}</p>
           </div>
           <button
@@ -145,8 +145,8 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
           )}
 
           {error && !loading && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-4">
-              <p className="text-sm text-red-700">{error}</p>
+            <div className="bg-red-900/30 border border-red-700/50 rounded-md p-4">
+              <p className="text-sm text-red-300">{error}</p>
             </div>
           )}
 
@@ -193,6 +193,7 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
             <div className="border border-slate-700 rounded-lg">
               <button
                 onClick={() => setShowVisibility(!showVisibility)}
+                aria-expanded={showVisibility}
                 className="w-full flex items-center justify-between p-3 text-sm font-medium text-slate-300 hover:bg-slate-700/50 rounded-lg transition-colors"
               >
                 <div className="flex items-center gap-2">

@@ -12,6 +12,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useHandshakes } from '../hooks/useHandshakes';
 import { useUserWallet } from '../hooks/useUserWallet';
 import { authFetch } from '../lib/authFetch';
+import { HANDSHAKE_FEE_SOL, POINTS_PER_HANDSHAKE } from '../lib/constants';
 import { toast } from './Toast';
 
 interface ClaimData {
@@ -83,7 +84,6 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
         } else {
           setError(msg);
         }
-      } finally {
       }
     };
 
@@ -91,8 +91,10 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
   }, [user, connected, publicKey, signMessage, wallet, linkWallet, verifyWallet]);
 
   // Step 1: Claim the handshake (get transaction to sign)
+  const claimAttempted = useRef(false);
   useEffect(() => {
-    if (!user || !wallet) return;
+    if (!user || !wallet || claimAttempted.current) return;
+    claimAttempted.current = true;
 
     const claim = async () => {
       setLoading(true);
@@ -260,7 +262,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
             <div className="bg-slate-700/50 rounded-lg p-4 mb-4">
               <p className="text-white font-medium">{claimData.initiatorName}</p>
               <p className="text-slate-400 text-sm mt-1">
-                Fee: 0.01 SOL to confirm this handshake
+                Fee: {HANDSHAKE_FEE_SOL} SOL to confirm this handshake
               </p>
             </div>
             <button
@@ -268,7 +270,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
               disabled={signing}
               className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors"
             >
-              {signing ? 'Signing transaction...' : 'Confirm & Pay 0.01 SOL'}
+              {signing ? 'Signing transaction...' : `Confirm & Pay ${HANDSHAKE_FEE_SOL} SOL`}
             </button>
           </div>
         )}
@@ -281,7 +283,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
               </svg>
               <p className="text-green-300 font-medium">Handshake confirmed!</p>
               <p className="text-green-400/70 text-sm mt-1">
-                Your soulbound NFT is being minted. +10 points!
+                Your soulbound NFT is being minted. +{POINTS_PER_HANDSHAKE} points!
               </p>
             </div>
             <button

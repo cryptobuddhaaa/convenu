@@ -22,6 +22,18 @@ const supabase = createClient(
 const SOLANA_RPC = process.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
 const TREASURY_WALLET = process.env.VITE_TREASURY_WALLET || '';
 const MINT_FEE_LAMPORTS = 0.01 * LAMPORTS_PER_SOL;
+const POINTS_PER_HANDSHAKE = 10;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidWalletAddress(addr: string): boolean {
+  try {
+    new PublicKey(addr);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // ──────────────────────────────────────────────
 // Initiate
@@ -40,6 +52,12 @@ async function handleInitiate(req: VercelRequest, res: VercelResponse) {
 
   if (!contactId || !walletAddress) {
     return res.status(400).json({ error: 'contactId and walletAddress required' });
+  }
+  if (!UUID_RE.test(contactId)) {
+    return res.status(400).json({ error: 'Invalid contactId format' });
+  }
+  if (!isValidWalletAddress(walletAddress)) {
+    return res.status(400).json({ error: 'Invalid wallet address' });
   }
 
   if (!TREASURY_WALLET) {
@@ -218,6 +236,12 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
   if (!handshakeId || !walletAddress) {
     return res.status(400).json({ error: 'handshakeId and walletAddress required' });
   }
+  if (!UUID_RE.test(handshakeId)) {
+    return res.status(400).json({ error: 'Invalid handshakeId format' });
+  }
+  if (!isValidWalletAddress(walletAddress)) {
+    return res.status(400).json({ error: 'Invalid wallet address' });
+  }
 
   if (!TREASURY_WALLET) {
     return res.status(500).json({ error: 'Treasury wallet not configured' });
@@ -347,6 +371,9 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
   if (!handshakeId || !signedTransaction || !['initiator', 'receiver'].includes(side)) {
     return res.status(400).json({ error: 'handshakeId, signedTransaction, and side (initiator|receiver) required' });
   }
+  if (!UUID_RE.test(handshakeId)) {
+    return res.status(400).json({ error: 'Invalid handshakeId format' });
+  }
 
   try {
     const { data: handshake, error: hsError } = await supabase
@@ -396,10 +423,18 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
       updateFields.status = 'matched';
     }
 
-    await supabase
+    const { error: updateError } = await supabase
       .from('handshakes')
       .update(updateFields)
       .eq('id', handshakeId);
+
+    if (updateError) {
+      console.error('Failed to save tx confirmation to DB:', updateError);
+      return res.status(500).json({
+        error: 'Payment confirmed on-chain but failed to save. Please contact support.',
+        txSignature,
+      });
+    }
 
     // When receiver pays, auto-add the initiator to the receiver's contacts
     if (side === 'receiver' && handshake.receiver_user_id && handshake.initiator_user_id) {
@@ -469,6 +504,9 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
   if (!handshakeId) {
     return res.status(400).json({ error: 'handshakeId required' });
   }
+  if (!UUID_RE.test(handshakeId)) {
+    return res.status(400).json({ error: 'Invalid handshakeId format' });
+  }
 
   const TREE_KEYPAIR_BASE58 = process.env.HANDSHAKE_TREE_KEYPAIR || '';
   const MERKLE_TREE_ADDRESS = process.env.HANDSHAKE_MERKLE_TREE || '';
@@ -512,8 +550,6 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
     if (!handshake.initiator_tx_signature || !handshake.receiver_tx_signature) {
       return res.status(400).json({ error: 'Both parties must pay before minting' });
     }
-
-    const POINTS_PER_HANDSHAKE = 10;
 
     const umi = createUmi(SOLANA_RPC).use(mplBubblegum());
     const keypairBytes = base58.serialize(TREE_KEYPAIR_BASE58);
@@ -569,18 +605,20 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
 
     if (!initiatorNftSig) {
       initiatorNftSig = await mintCNFT(handshake.initiator_wallet);
-      await supabase
+      const { error: saveErr1 } = await supabase
         .from('handshakes')
         .update({ initiator_nft_address: initiatorNftSig })
         .eq('id', handshakeId);
+      if (saveErr1) console.error('Failed to save initiator NFT address:', saveErr1);
     }
 
     if (!receiverNftSig) {
       receiverNftSig = await mintCNFT(handshake.receiver_wallet);
-      await supabase
+      const { error: saveErr2 } = await supabase
         .from('handshakes')
         .update({ receiver_nft_address: receiverNftSig })
         .eq('id', handshakeId);
+      if (saveErr2) console.error('Failed to save receiver NFT address:', saveErr2);
     }
 
     // Both minted — finalize status and award points
