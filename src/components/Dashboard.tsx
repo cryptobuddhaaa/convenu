@@ -191,21 +191,37 @@ export default function Dashboard() {
             <div className="border-t border-slate-700 pt-3 mt-3">
               <h4 className="text-sm font-medium text-slate-400 mb-2">Recent</h4>
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {handshakes.slice(0, 8).map((h) => (
-                  <div key={h.id} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <StatusDot status={h.status} />
-                      <span className="text-slate-300 truncate">
-                        {h.initiatorName && h.initiatorUserId !== user?.id
-                          ? `From ${h.initiatorName}`
-                          : h.eventTitle || h.receiverIdentifier || 'Handshake'}
-                      </span>
+                {handshakes.slice(0, 8).map((h) => {
+                  const isReceiverPending = h.status === 'pending' && h.initiatorUserId !== user?.id;
+                  return (
+                    <div key={h.id} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <StatusDot status={h.status} />
+                        <span className="text-slate-300 truncate">
+                          {h.initiatorName && h.initiatorUserId !== user?.id
+                            ? `From ${h.initiatorName}`
+                            : h.eventTitle || h.receiverIdentifier || 'Handshake'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 ml-2">
+                        {isReceiverPending && (
+                          <button
+                            onClick={() => {
+                              window.location.search = `?claim=${h.id}`;
+                            }}
+                            className="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium rounded transition-colors whitespace-nowrap"
+                            aria-label={`Claim handshake from ${h.initiatorName || 'unknown'}`}
+                          >
+                            Claim
+                          </button>
+                        )}
+                        <span className="text-slate-500 text-xs whitespace-nowrap">
+                          {new Date(h.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-slate-500 text-xs whitespace-nowrap ml-2">
-                      {new Date(h.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : (
