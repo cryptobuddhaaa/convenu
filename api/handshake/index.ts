@@ -74,6 +74,38 @@ async function handleInitiate(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Check reverse direction: is there already a handshake where this user
+    // is the receiver and the contact's person was the initiator?
+    const { data: receivedHandshakes } = await supabase
+      .from('handshakes')
+      .select('id, status, initiator_user_id')
+      .eq('receiver_user_id', userId)
+      .in('status', ['pending', 'claimed', 'matched', 'minted']);
+
+    if (receivedHandshakes && receivedHandshakes.length > 0) {
+      for (const rh of receivedHandshakes) {
+        const { data: initiatorUser } = await supabase.auth.admin.getUserById(rh.initiator_user_id);
+        const initiatorEmail = initiatorUser?.user?.email;
+        const { data: initiatorTelegram } = await supabase
+          .from('telegram_links')
+          .select('telegram_username')
+          .eq('user_id', rh.initiator_user_id)
+          .single();
+
+        const contactEmail = contact.email?.toLowerCase();
+        const contactTelegram = contact.telegram_handle?.replace('@', '').toLowerCase();
+
+        if ((contactEmail && initiatorEmail?.toLowerCase() === contactEmail) ||
+            (contactTelegram && initiatorTelegram?.telegram_username?.toLowerCase() === contactTelegram)) {
+          return res.status(409).json({
+            error: 'A handshake already exists with this person',
+            handshakeId: rh.id,
+            status: rh.status,
+          });
+        }
+      }
+    }
+
     const { data: handshake, error: hsError } = await supabase
       .from('handshakes')
       .insert({

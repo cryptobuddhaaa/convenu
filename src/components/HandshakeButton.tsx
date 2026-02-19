@@ -20,12 +20,14 @@ interface HandshakeButtonProps {
 export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
   const { signTransaction } = useWallet();
   const { getPrimaryWallet } = useUserWallet();
-  const { initiate, confirmTx, getByContactId, getByIdentifier } = useHandshakes();
+  const { initiate, confirmTx, getByContactId, getByIdentifier, getByInitiatorName } = useHandshakes();
   const [loading, setLoading] = useState(false);
 
+  const contactFullName = `${contact.firstName} ${contact.lastName}`;
   const existingHandshake = getByContactId(contact.id)
     || getByIdentifier(contact.telegramHandle || '')
-    || getByIdentifier(contact.email || '');
+    || getByIdentifier(contact.email || '')
+    || getByInitiatorName(contactFullName);
   const wallet = getPrimaryWallet();
 
   // Don't show if contact has no telegram/email (can't claim)
@@ -125,13 +127,13 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
         );
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to initiate handshake';
+      const message = error instanceof Error ? error.message : '';
       if (message.includes('already exists')) {
-        toast.info('Handshake already exists for this contact');
+        toast.info('A handshake already exists with this person');
       } else if (message.includes('User rejected')) {
         toast.info('Transaction cancelled');
       } else {
-        toast.error(message);
+        toast.error(message || 'Failed to initiate handshake');
       }
     } finally {
       setLoading(false);
