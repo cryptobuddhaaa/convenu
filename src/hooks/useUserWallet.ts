@@ -70,10 +70,13 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
       const existing = get().wallets.find((w) => w.walletAddress === walletAddress);
       if (existing) return existing;
 
-      // Block if user already has a DIFFERENT verified wallet
+      // Block if user already has a DIFFERENT verified wallet (permanent binding)
       const verifiedWallet = get().wallets.find((w) => w.verifiedAt);
       if (verifiedWallet && verifiedWallet.walletAddress !== walletAddress) {
-        throw new Error('You already have a verified wallet. Unlink it first to connect a different one.');
+        throw new Error(
+          'This account is permanently bound to a different wallet. ' +
+          'Soulbound NFTs and points are tied to that address and cannot be transferred.'
+        );
       }
 
       // Clean up any stale unverified wallet entries (abandoned connection attempts)
@@ -92,7 +95,8 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
         .eq('user_id', userId)
         .neq('wallet_address', walletAddress);
 
-      // Use upsert to handle re-linking a wallet address that has an orphaned DB row
+      // Use upsert to handle re-linking a wallet address that has an orphaned DB row.
+      // Do NOT reset verified_at — if the wallet was previously verified, preserve it.
       const { data, error } = await supabase
         .from('user_wallets')
         .upsert(
@@ -100,9 +104,8 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
             user_id: userId,
             wallet_address: walletAddress,
             is_primary: true,
-            verified_at: null,
           },
-          { onConflict: 'user_id,wallet_address' }
+          { onConflict: 'user_id,wallet_address', ignoreDuplicates: false }
         )
         .select()
         .single();
@@ -116,8 +119,8 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
       set({ wallets: [...get().wallets.filter((w) => w.id !== wallet.id), wallet] });
       return wallet;
     } catch (error) {
-      // Re-throw user-facing errors (uniqueness checks)
-      if (error instanceof Error && error.message.includes('already')) {
+      // Re-throw user-facing errors
+      if (error instanceof Error && (error.message.includes('already') || error.message.includes('permanently'))) {
         throw error;
       }
       console.error('Failed to link wallet:', error);
