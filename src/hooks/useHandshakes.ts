@@ -81,7 +81,7 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
       // (receiver_user_id is NULL until claimed, so RLS blocks the client query)
       let pendingForMe: Record<string, unknown>[] = [];
       try {
-        const response = await fetch(`/api/handshake/pending?userId=${userId}`);
+        const response = await fetch(`/api/handshake?action=pending&userId=${userId}`);
         if (response.ok) {
           const result = await response.json();
           pendingForMe = result.handshakes || [];
@@ -114,7 +114,7 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
 
   initiate: async (userId: string, contactId: string, walletAddress: string) => {
     try {
-      const response = await fetch('/api/handshake/initiate', {
+      const response = await fetch('/api/handshake?action=initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, contactId, walletAddress }),
@@ -139,7 +139,7 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
 
   confirmTx: async (handshakeId: string, signedTransaction: string, side: 'initiator' | 'receiver') => {
     try {
-      const response = await fetch('/api/handshake/confirm-tx', {
+      const response = await fetch('/api/handshake?action=confirm-tx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handshakeId, signedTransaction, side }),
@@ -159,7 +159,7 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
 
   mint: async (handshakeId: string) => {
     try {
-      const response = await fetch('/api/handshake/mint', {
+      const response = await fetch('/api/handshake?action=mint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handshakeId }),

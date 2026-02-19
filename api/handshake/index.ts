@@ -1,0 +1,560 @@
+/**
+ * /api/handshake?action=initiate|claim|confirm-tx|mint|pending
+ * Consolidated handshake endpoint to stay within Vercel Hobby plan's 12-function limit.
+ */
+
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
+import {
+  Connection,
+  PublicKey,
+  Transaction,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+} from '@solana/web3.js';
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
+
+const SOLANA_RPC = process.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+const TREASURY_WALLET = process.env.VITE_TREASURY_WALLET || '';
+const MINT_FEE_LAMPORTS = 0.01 * LAMPORTS_PER_SOL;
+
+// ──────────────────────────────────────────────
+// Initiate
+// ──────────────────────────────────────────────
+
+async function handleInitiate(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { userId, contactId, walletAddress } = req.body || {};
+
+  if (!userId || !contactId || !walletAddress) {
+    return res.status(400).json({ error: 'userId, contactId, and walletAddress required' });
+  }
+
+  if (!TREASURY_WALLET) {
+    return res.status(500).json({ error: 'Treasury wallet not configured' });
+  }
+
+  try {
+    const { data: contact, error: contactError } = await supabase
+      .from('contacts')
+      .select('id, first_name, last_name, telegram_handle, email, event_id, event_title, date_met')
+      .eq('id', contactId)
+      .eq('user_id', userId)
+      .single();
+
+    if (contactError || !contact) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    const receiverIdentifier = contact.telegram_handle || contact.email;
+    if (!receiverIdentifier) {
+      return res.status(400).json({ error: 'Contact must have a Telegram handle or email for handshake' });
+    }
+
+    const { data: existing } = await supabase
+      .from('handshakes')
+      .select('id, status')
+      .eq('initiator_user_id', userId)
+      .eq('contact_id', contactId)
+      .in('status', ['pending', 'matched', 'minted'])
+      .single();
+
+    if (existing) {
+      return res.status(409).json({
+        error: 'Handshake already exists for this contact',
+        handshakeId: existing.id,
+        status: existing.status,
+      });
+    }
+
+    const { data: handshake, error: hsError } = await supabase
+      .from('handshakes')
+      .insert({
+        initiator_user_id: userId,
+        receiver_identifier: receiverIdentifier,
+        contact_id: contactId,
+        event_id: contact.event_id,
+        event_title: contact.event_title,
+        event_date: contact.date_met,
+        initiator_wallet: walletAddress,
+        mint_fee_lamports: MINT_FEE_LAMPORTS,
+        status: 'pending',
+      })
+      .select('id')
+      .single();
+
+    if (hsError || !handshake) {
+      console.error('Error creating handshake:', hsError);
+      return res.status(500).json({ error: 'Failed to create handshake' });
+    }
+
+    const connection = new Connection(SOLANA_RPC, 'confirmed');
+    const payerKey = new PublicKey(walletAddress);
+    const treasuryKey = new PublicKey(TREASURY_WALLET);
+
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: payerKey,
+        toPubkey: treasuryKey,
+        lamports: MINT_FEE_LAMPORTS,
+      })
+    );
+
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    transaction.recentBlockhash = blockhash;
+    transaction.lastValidBlockHeight = lastValidBlockHeight;
+    transaction.feePayer = payerKey;
+
+    const serialized = transaction.serialize({
+      requireAllSignatures: false,
+      verifySignatures: false,
+    });
+
+    return res.status(200).json({
+      handshakeId: handshake.id,
+      transaction: Buffer.from(serialized).toString('base64'),
+      receiverIdentifier,
+      contactName: `${contact.first_name} ${contact.last_name}`,
+    });
+  } catch (error) {
+    console.error('Handshake initiation error:', error);
+    return res.status(500).json({ error: 'Failed to initiate handshake' });
+  }
+}
+
+// ──────────────────────────────────────────────
+// Claim
+// ──────────────────────────────────────────────
+
+async function handleClaim(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { handshakeId, userId, walletAddress } = req.body || {};
+
+  if (!handshakeId || !userId || !walletAddress) {
+    return res.status(400).json({ error: 'handshakeId, userId, and walletAddress required' });
+  }
+
+  if (!TREASURY_WALLET) {
+    return res.status(500).json({ error: 'Treasury wallet not configured' });
+  }
+
+  try {
+    const { data: handshake, error: hsError } = await supabase
+      .from('handshakes')
+      .select('*')
+      .eq('id', handshakeId)
+      .single();
+
+    if (hsError || !handshake) {
+      return res.status(404).json({ error: 'Handshake not found' });
+    }
+
+    if (handshake.status !== 'pending') {
+      return res.status(409).json({
+        error: `Handshake is already ${handshake.status}`,
+        status: handshake.status,
+      });
+    }
+
+    if (handshake.initiator_user_id === userId) {
+      return res.status(400).json({ error: 'Cannot claim your own handshake' });
+    }
+
+    if (new Date(handshake.expires_at) < new Date()) {
+      await supabase
+        .from('handshakes')
+        .update({ status: 'expired' })
+        .eq('id', handshakeId);
+      return res.status(410).json({ error: 'Handshake has expired' });
+    }
+
+    const { data: telegramLink } = await supabase
+      .from('telegram_links')
+      .select('telegram_username')
+      .eq('user_id', userId)
+      .single();
+
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+    const userEmail = authUser?.user?.email;
+    const userTelegram = telegramLink?.telegram_username;
+
+    const receiverId = handshake.receiver_identifier;
+    const identifierMatch =
+      (userTelegram && receiverId.replace('@', '').toLowerCase() === userTelegram.toLowerCase()) ||
+      (userEmail && receiverId.toLowerCase() === userEmail.toLowerCase());
+
+    if (!identifierMatch) {
+      return res.status(403).json({ error: 'You are not the intended receiver of this handshake' });
+    }
+
+    await supabase
+      .from('handshakes')
+      .update({
+        receiver_user_id: userId,
+        receiver_wallet: walletAddress,
+        status: 'matched',
+      })
+      .eq('id', handshakeId);
+
+    const connection = new Connection(SOLANA_RPC, 'confirmed');
+    const payerKey = new PublicKey(walletAddress);
+    const treasuryKey = new PublicKey(TREASURY_WALLET);
+
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: payerKey,
+        toPubkey: treasuryKey,
+        lamports: MINT_FEE_LAMPORTS,
+      })
+    );
+
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    transaction.recentBlockhash = blockhash;
+    transaction.lastValidBlockHeight = lastValidBlockHeight;
+    transaction.feePayer = payerKey;
+
+    const serialized = transaction.serialize({
+      requireAllSignatures: false,
+      verifySignatures: false,
+    });
+
+    return res.status(200).json({
+      handshakeId,
+      status: 'matched',
+      transaction: Buffer.from(serialized).toString('base64'),
+      initiatorName: handshake.event_title
+        ? `Handshake from ${handshake.event_title}`
+        : 'Proof of Handshake',
+    });
+  } catch (error) {
+    console.error('Handshake claim error:', error);
+    return res.status(500).json({ error: 'Failed to claim handshake' });
+  }
+}
+
+// ──────────────────────────────────────────────
+// Confirm Transaction
+// ──────────────────────────────────────────────
+
+async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { handshakeId, signedTransaction, side } = req.body || {};
+
+  if (!handshakeId || !signedTransaction || !['initiator', 'receiver'].includes(side)) {
+    return res.status(400).json({ error: 'handshakeId, signedTransaction, and side (initiator|receiver) required' });
+  }
+
+  try {
+    const { data: handshake, error: hsError } = await supabase
+      .from('handshakes')
+      .select('*')
+      .eq('id', handshakeId)
+      .single();
+
+    if (hsError || !handshake) {
+      return res.status(404).json({ error: 'Handshake not found' });
+    }
+
+    const connection = new Connection(SOLANA_RPC, 'confirmed');
+    const txBuffer = Buffer.from(signedTransaction, 'base64');
+    const transaction = Transaction.from(txBuffer);
+
+    const txSignature = await connection.sendRawTransaction(transaction.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    });
+
+    const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+    await connection.confirmTransaction({
+      signature: txSignature,
+      blockhash: latestBlockhash.blockhash,
+      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    }, 'confirmed');
+
+    const now = new Date().toISOString();
+    const updateFields: Record<string, unknown> = {};
+
+    if (side === 'initiator') {
+      updateFields.initiator_tx_signature = txSignature;
+      updateFields.initiator_minted_at = now;
+    } else {
+      updateFields.receiver_tx_signature = txSignature;
+      updateFields.receiver_minted_at = now;
+    }
+
+    await supabase
+      .from('handshakes')
+      .update(updateFields)
+      .eq('id', handshakeId);
+
+    const { data: updated } = await supabase
+      .from('handshakes')
+      .select('initiator_tx_signature, receiver_tx_signature, status')
+      .eq('id', handshakeId)
+      .single();
+
+    const bothPaid = updated?.initiator_tx_signature && updated?.receiver_tx_signature;
+
+    return res.status(200).json({
+      txSignature,
+      side,
+      bothPaid: !!bothPaid,
+      status: updated?.status,
+    });
+  } catch (error) {
+    console.error('Confirm tx error:', error);
+    return res.status(500).json({ error: 'Failed to confirm transaction' });
+  }
+}
+
+// ──────────────────────────────────────────────
+// Mint
+// ──────────────────────────────────────────────
+
+async function handleMint(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { handshakeId } = req.body || {};
+  if (!handshakeId) {
+    return res.status(400).json({ error: 'handshakeId required' });
+  }
+
+  const TREE_KEYPAIR_BASE58 = process.env.HANDSHAKE_TREE_KEYPAIR || '';
+  const MERKLE_TREE_ADDRESS = process.env.HANDSHAKE_MERKLE_TREE || '';
+
+  if (!TREE_KEYPAIR_BASE58 || !MERKLE_TREE_ADDRESS) {
+    return res.status(500).json({ error: 'Merkle tree not configured' });
+  }
+
+  try {
+    // Dynamic imports to avoid loading heavy deps for non-mint actions
+    const { createUmi } = await import('@metaplex-foundation/umi-bundle-defaults');
+    const { mintV1, mplBubblegum } = await import('@metaplex-foundation/mpl-bubblegum');
+    const { createSignerFromKeypair, publicKey } = await import('@metaplex-foundation/umi');
+    const { base58 } = await import('@metaplex-foundation/umi/serializers');
+
+    const { data: handshake, error: hsError } = await supabase
+      .from('handshakes')
+      .select('*')
+      .eq('id', handshakeId)
+      .single();
+
+    if (hsError || !handshake) {
+      return res.status(404).json({ error: 'Handshake not found' });
+    }
+
+    if (handshake.status === 'minted') {
+      return res.status(409).json({ error: 'Already minted' });
+    }
+
+    if (handshake.status !== 'matched') {
+      return res.status(400).json({ error: 'Handshake must be matched before minting' });
+    }
+
+    if (!handshake.initiator_tx_signature || !handshake.receiver_tx_signature) {
+      return res.status(400).json({ error: 'Both parties must pay before minting' });
+    }
+
+    const POINTS_PER_HANDSHAKE = 10;
+
+    const umi = createUmi(SOLANA_RPC).use(mplBubblegum());
+    const keypairBytes = base58.serialize(TREE_KEYPAIR_BASE58);
+    const keypair = umi.eddsa.createKeypairFromSecretKey(keypairBytes);
+    const signer = createSignerFromKeypair(umi, keypair);
+    umi.identity = signer;
+    umi.payer = signer;
+
+    const eventInfo = handshake.event_title || 'Meeting';
+    const eventDate = handshake.event_date || new Date().toISOString().split('T')[0];
+    const metadataUri = `https://arweave.net/placeholder-${handshakeId}`;
+
+    async function mintCNFT(recipient: string) {
+      const { signature } = await mintV1(umi, {
+        leafOwner: publicKey(recipient),
+        merkleTree: publicKey(MERKLE_TREE_ADDRESS),
+        metadata: {
+          name: `Handshake: ${eventInfo}`,
+          uri: metadataUri,
+          sellerFeeBasisPoints: 0,
+          collection: null,
+          creators: [],
+        },
+      }).sendAndConfirm(umi);
+      return base58.deserialize(signature)[0];
+    }
+
+    const initiatorNftSig = await mintCNFT(handshake.initiator_wallet);
+    const receiverNftSig = await mintCNFT(handshake.receiver_wallet);
+
+    await supabase
+      .from('handshakes')
+      .update({
+        status: 'minted',
+        initiator_nft_address: initiatorNftSig,
+        receiver_nft_address: receiverNftSig,
+        points_awarded: POINTS_PER_HANDSHAKE,
+      })
+      .eq('id', handshakeId);
+
+    const pointEntries = [
+      {
+        user_id: handshake.initiator_user_id,
+        handshake_id: handshakeId,
+        points: POINTS_PER_HANDSHAKE,
+        reason: `Handshake: ${eventInfo}`,
+      },
+      {
+        user_id: handshake.receiver_user_id,
+        handshake_id: handshakeId,
+        points: POINTS_PER_HANDSHAKE,
+        reason: `Handshake: ${eventInfo}`,
+      },
+    ];
+
+    await supabase.from('user_points').insert(pointEntries);
+
+    for (const uid of [handshake.initiator_user_id, handshake.receiver_user_id]) {
+      if (uid) {
+        const { count } = await supabase
+          .from('handshakes')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'minted')
+          .or(`initiator_user_id.eq.${uid},receiver_user_id.eq.${uid}`);
+
+        await supabase
+          .from('trust_scores')
+          .update({
+            total_handshakes: count || 0,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', uid);
+      }
+    }
+
+    return res.status(200).json({
+      status: 'minted',
+      initiatorNft: initiatorNftSig,
+      receiverNft: receiverNftSig,
+      pointsAwarded: POINTS_PER_HANDSHAKE,
+    });
+  } catch (error) {
+    console.error('Mint error:', error);
+    return res.status(500).json({ error: 'Failed to mint handshake NFTs' });
+  }
+}
+
+// ──────────────────────────────────────────────
+// Pending
+// ──────────────────────────────────────────────
+
+async function handlePending(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const userId = req.query.userId as string;
+  if (!userId) {
+    return res.status(400).json({ error: 'userId required' });
+  }
+
+  try {
+    const { data: telegramLink } = await supabase
+      .from('telegram_links')
+      .select('telegram_username')
+      .eq('user_id', userId)
+      .single();
+
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+    const userEmail = authUser?.user?.email;
+    const userTelegram = telegramLink?.telegram_username;
+
+    if (!userEmail && !userTelegram) {
+      return res.status(200).json({ handshakes: [] });
+    }
+
+    const identifiers: string[] = [];
+    if (userTelegram) {
+      identifiers.push(userTelegram.toLowerCase());
+      identifiers.push(`@${userTelegram.toLowerCase()}`);
+    }
+    if (userEmail) {
+      identifiers.push(userEmail.toLowerCase());
+    }
+
+    const { data, error } = await supabase
+      .from('handshakes')
+      .select('*')
+      .eq('status', 'pending')
+      .is('receiver_user_id', null)
+      .neq('initiator_user_id', userId)
+      .in('receiver_identifier', identifiers)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching pending handshakes:', error);
+      return res.status(500).json({ error: 'Failed to fetch pending handshakes' });
+    }
+
+    const handshakes = data || [];
+    const initiatorIds = [...new Set(handshakes.map((h) => h.initiator_user_id))];
+
+    const nameMap: Record<string, string> = {};
+    for (const uid of initiatorIds) {
+      const { data: initiator } = await supabase.auth.admin.getUserById(uid);
+      if (initiator?.user) {
+        nameMap[uid] =
+          initiator.user.user_metadata?.full_name ||
+          initiator.user.email?.split('@')[0] ||
+          'Someone';
+      }
+    }
+
+    const enriched = handshakes.map((h) => ({
+      ...h,
+      initiator_name: nameMap[h.initiator_user_id] || 'Someone',
+    }));
+
+    return res.status(200).json({ handshakes: enriched });
+  } catch (error) {
+    console.error('Pending handshakes error:', error);
+    return res.status(500).json({ error: 'Failed to fetch pending handshakes' });
+  }
+}
+
+// ──────────────────────────────────────────────
+// Router
+// ──────────────────────────────────────────────
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const action = req.query.action as string;
+
+  switch (action) {
+    case 'initiate':
+      return handleInitiate(req, res);
+    case 'claim':
+      return handleClaim(req, res);
+    case 'confirm-tx':
+      return handleConfirmTx(req, res);
+    case 'mint':
+      return handleMint(req, res);
+    case 'pending':
+      return handlePending(req, res);
+    default:
+      return res.status(400).json({ error: 'Unknown action. Use ?action=initiate|claim|confirm-tx|mint|pending' });
+  }
+}

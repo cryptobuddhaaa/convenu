@@ -42,7 +42,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
     const claim = async () => {
       setLoading(true);
       try {
-        const response = await fetch('/api/handshake/claim', {
+        const response = await fetch('/api/handshake?action=claim', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -80,7 +80,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
       const signedTx = await signTransaction(transaction);
 
       const serialized = signedTx.serialize();
-      const response = await fetch('/api/handshake/confirm-tx', {
+      const response = await fetch('/api/handshake?action=confirm-tx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -99,7 +99,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
 
       // If both sides have paid, trigger minting
       if (result.bothPaid) {
-        await fetch('/api/handshake/mint', {
+        await fetch('/api/handshake?action=mint', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ handshakeId: claimData.handshakeId }),
