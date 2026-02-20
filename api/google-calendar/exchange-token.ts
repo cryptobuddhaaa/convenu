@@ -12,10 +12,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const authUser = await requireAuth(req, res);
-  if (!authUser) return;
-
   try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
     const { code } = req.body;
 
     if (!code) {
