@@ -402,15 +402,15 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
     }
 
     const instructions = transaction.instructions;
-    if (instructions.length !== 1) {
-      return res.status(400).json({ error: 'Transaction must contain exactly one instruction' });
+    // Find the SystemProgram transfer instruction.
+    // Wallets (e.g. Phantom) may inject ComputeBudget instructions for priority fees,
+    // so we allow extra instructions but require exactly one SystemProgram transfer.
+    const systemIxs = instructions.filter(ix => ix.programId.equals(SystemProgram.programId));
+    if (systemIxs.length !== 1) {
+      return res.status(400).json({ error: 'Transaction must contain exactly one SystemProgram instruction' });
     }
 
-    const ix = instructions[0];
-    const isSystemTransfer = ix.programId.equals(SystemProgram.programId);
-    if (!isSystemTransfer) {
-      return res.status(400).json({ error: 'Transaction must be a SystemProgram transfer' });
-    }
+    const ix = systemIxs[0];
 
     // Decode SystemProgram.transfer instruction data (4-byte type prefix + 8-byte LE lamports)
     if (ix.data.length < 12) {
