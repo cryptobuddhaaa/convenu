@@ -483,32 +483,70 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
           .eq('user_id', handshake.initiator_user_id)
           .single();
 
-        const fullName = initiatorUser?.user?.user_metadata?.full_name || '';
-        const nameParts = fullName.split(' ');
-        const firstName = nameParts[0] || initiatorUser?.user?.email?.split('@')[0] || 'Unknown';
-        const lastName = nameParts.slice(1).join(' ') || '';
+        const initiatorEmail = initiatorUser?.user?.email || null;
+        const initiatorTg = initiatorTelegram?.telegram_username || null;
 
-        // contacts.itinerary_id is NOT NULL — find receiver's most recent itinerary
-        const { data: receiverItinerary } = await supabase
-          .from('itineraries')
-          .select('id')
-          .eq('user_id', handshake.receiver_user_id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+        // Check if receiver already has this person as a contact (by email or telegram)
+        let alreadyExists = false;
+        if (initiatorEmail) {
+          const { count } = await supabase
+            .from('contacts')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', handshake.receiver_user_id)
+            .ilike('email', initiatorEmail);
+          if (count && count > 0) alreadyExists = true;
+        }
+        if (!alreadyExists && initiatorTg) {
+          const { count } = await supabase
+            .from('contacts')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', handshake.receiver_user_id)
+            .ilike('telegram_handle', initiatorTg);
+          if (count && count > 0) alreadyExists = true;
+        }
 
-        if (receiverItinerary) {
-          await supabase.from('contacts').insert({
-            user_id: handshake.receiver_user_id,
-            first_name: firstName,
-            last_name: lastName,
-            telegram_handle: initiatorTelegram?.telegram_username || null,
-            email: initiatorUser?.user?.email || null,
-            event_title: handshake.event_title || 'Handshake',
-            event_id: handshake.event_id || 'handshake',
-            itinerary_id: receiverItinerary.id,
-            date_met: handshake.event_date || new Date().toISOString().split('T')[0],
-          });
+        if (!alreadyExists) {
+          const fullName = initiatorUser?.user?.user_metadata?.full_name || '';
+          const nameParts = fullName.split(' ');
+          const firstName = nameParts[0] || initiatorEmail?.split('@')[0] || 'Unknown';
+          const lastName = nameParts.slice(1).join(' ') || '';
+
+          // contacts.itinerary_id is NOT NULL — find or create an itinerary for the receiver
+          let { data: receiverItinerary } = await supabase
+            .from('itineraries')
+            .select('id')
+            .eq('user_id', handshake.receiver_user_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (!receiverItinerary) {
+            // Create a default itinerary so the contact has somewhere to live
+            const { data: newItinerary } = await supabase
+              .from('itineraries')
+              .insert({
+                user_id: handshake.receiver_user_id,
+                title: 'My Contacts',
+                data: { days: [] },
+              })
+              .select('id')
+              .single();
+            receiverItinerary = newItinerary;
+          }
+
+          if (receiverItinerary) {
+            await supabase.from('contacts').insert({
+              user_id: handshake.receiver_user_id,
+              first_name: firstName,
+              last_name: lastName,
+              telegram_handle: initiatorTg,
+              email: initiatorEmail,
+              event_title: handshake.event_title || 'Handshake',
+              event_id: handshake.event_id || 'handshake',
+              itinerary_id: receiverItinerary.id,
+              date_met: handshake.event_date || new Date().toISOString().split('T')[0],
+            });
+          }
         }
       } catch (contactErr) {
         // Non-critical — don't fail the handshake if contact creation fails
