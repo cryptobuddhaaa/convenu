@@ -218,17 +218,35 @@ export function WalletButton() {
     );
   }
 
-  // Detect Telegram WebApp — wallets can't connect inside Telegram's in-app browser
+  // Detect Telegram WebApp — if no wallet found, offer to open in external browser
   const isTelegramWebApp = typeof window !== 'undefined' &&
     (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
-  if (isTelegramWebApp && !primaryWallet) {
+  if (isTelegramWebApp && !primaryWallet && !connected) {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 border border-slate-600 rounded-md">
-        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-        <span className="text-xs text-slate-400">Open in browser to connect wallet</span>
-      </div>
+      <>
+        <div className="flex items-center gap-2">
+          <WalletMultiButton
+            style={{ backgroundColor: 'rgb(126, 34, 206)' }}
+          />
+          <button
+            onClick={() => {
+              try {
+                window.Telegram?.WebApp.openLink(window.location.origin + window.location.pathname);
+              } catch {
+                window.open(window.location.origin + window.location.pathname, '_blank');
+              }
+            }}
+            className="text-xs text-slate-400 hover:text-slate-200 whitespace-nowrap"
+            title="Open in external browser to connect wallet"
+            aria-label="Open in browser"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </button>
+        </div>
+        <ConfirmDialog {...dialogProps} />
+      </>
     );
   }
 
