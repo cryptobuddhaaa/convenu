@@ -23,6 +23,12 @@ export function WalletButton() {
   const [verifying, setVerifying] = useState(false);
   const { confirm, dialogProps } = useConfirmDialog();
 
+  // Telegram webview state — hooks must be at top level (not inside conditionals)
+  const [copied, setCopied] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [showLoginUrl, setShowLoginUrl] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const primaryWallet = getPrimaryWallet();
   const walletAddress = publicKey?.toBase58();
 
@@ -224,10 +230,6 @@ export function WalletButton() {
   const isTelegramWebApp = typeof window !== 'undefined' &&
     (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
   if (isTelegramWebApp && !primaryWallet && !connected) {
-    const [copied, setCopied] = useState(false);
-    const [generating, setGenerating] = useState(false);
-    const [showLoginUrl, setShowLoginUrl] = useState<string | null>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
 
     // Copy text to clipboard with fallbacks for iOS Telegram webview
     const copyToClipboard = async (text: string): Promise<boolean> => {
