@@ -281,6 +281,9 @@ export function WalletButton() {
           borderRadius: '6px',
           backgroundColor: 'rgb(126, 34, 206)',
           lineHeight: '34px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       />
       <ConfirmDialog {...dialogProps} />
