@@ -22,7 +22,7 @@ interface HandshakeButtonProps {
 export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
   const { signTransaction } = useWallet();
   const { getPrimaryWallet } = useUserWallet();
-  const { initiate, confirmTx, getByContactId, getByIdentifier, getByInitiatorName } = useHandshakes();
+  const { initiate, confirmTx, mint, getByContactId, getByIdentifier, getByInitiatorName, getByInitiatorEmail } = useHandshakes();
   const [loading, setLoading] = useState(false);
   const { confirm, dialogProps } = useConfirmDialog();
 
@@ -30,7 +30,8 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
   const existingHandshake = getByContactId(contact.id)
     || getByIdentifier(contact.telegramHandle || '')
     || getByIdentifier(contact.email || '')
-    || getByInitiatorName(contactFullName);
+    || getByInitiatorName(contactFullName)
+    || getByInitiatorEmail(contact.email || '');
   const wallet = getPrimaryWallet();
 
   // Don't show if contact has no telegram/email (can't claim)
@@ -69,6 +70,23 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
       ? `https://explorer.solana.com/tx/${nftSig}${cluster !== 'mainnet-beta' ? `?cluster=${cluster}` : ''}`
       : null;
 
+    const canMint = existingHandshake.status === 'matched';
+
+    const handleMint = async () => {
+      setLoading(true);
+      try {
+        toast.info('Minting NFTs...');
+        const minted = await mint(existingHandshake.id);
+        if (minted) {
+          toast.success('Proof of Handshake NFTs minted!');
+        } else {
+          toast.error('Minting failed. Please try again.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
     return (
       <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border ${info.bgColor}`}>
         <svg className={`w-3.5 h-3.5 ${info.color}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -87,6 +105,14 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
           </a>
+        ) : canMint ? (
+          <button
+            onClick={handleMint}
+            disabled={loading}
+            className="text-blue-400 hover:text-blue-300 underline"
+          >
+            {loading ? 'Minting...' : 'Mint NFTs'}
+          </button>
         ) : (
           <span className={info.color}>{info.label}</span>
         )}
@@ -146,6 +172,15 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
         toast.success(
           `Handshake sent to ${result.contactName}! Tx: ${confirmResult.txSignature.slice(0, 8)}...`
         );
+
+        // Auto-mint if both parties have paid
+        if (confirmResult.bothPaid) {
+          toast.info('Both parties paid! Minting NFTs...');
+          const minted = await mint(result.handshakeId);
+          if (minted) {
+            toast.success('Proof of Handshake NFTs minted!');
+          }
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : '';

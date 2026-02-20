@@ -753,38 +753,54 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
     const userEmail = pendingUser?.user?.email;
     const userTelegram = telegramLink?.telegram_username;
 
-    if (!userEmail && !userTelegram) {
-      return res.status(200).json({ handshakes: [] });
+    // Part 1: Unclaimed pending handshakes addressed to this user by identifier
+    let pendingRows: Record<string, unknown>[] = [];
+    if (userEmail || userTelegram) {
+      const identifiers: string[] = [];
+      if (userTelegram) {
+        identifiers.push(userTelegram.toLowerCase());
+        identifiers.push(`@${userTelegram.toLowerCase()}`);
+      }
+      if (userEmail) {
+        identifiers.push(userEmail.toLowerCase());
+      }
+
+      const { data, error } = await supabase
+        .from('handshakes')
+        .select('id, initiator_user_id, receiver_identifier, event_title, event_date, status, created_at, expires_at')
+        .eq('status', 'pending')
+        .is('receiver_user_id', null)
+        .neq('initiator_user_id', userId)
+        .in('receiver_identifier', identifiers)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching pending handshakes:', error);
+      } else {
+        pendingRows = data || [];
+      }
     }
 
-    const identifiers: string[] = [];
-    if (userTelegram) {
-      identifiers.push(userTelegram.toLowerCase());
-      identifiers.push(`@${userTelegram.toLowerCase()}`);
-    }
-    if (userEmail) {
-      identifiers.push(userEmail.toLowerCase());
-    }
-
-    const { data, error } = await supabase
+    // Part 2: All handshakes where user is already the receiver (claimed/matched/minted)
+    // These need initiator info enrichment so the client can match them to contacts.
+    const { data: receiverRows, error: receiverError } = await supabase
       .from('handshakes')
-      .select('id, initiator_user_id, receiver_identifier, event_title, event_date, status, created_at, expires_at')
-      .eq('status', 'pending')
-      .is('receiver_user_id', null)
-      .neq('initiator_user_id', userId)
-      .in('receiver_identifier', identifiers)
-      .gt('expires_at', new Date().toISOString())
+      .select('*')
+      .eq('receiver_user_id', userId)
+      .in('status', ['claimed', 'matched', 'minted'])
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching pending handshakes:', error);
-      return res.status(500).json({ error: 'Failed to fetch pending handshakes' });
+    if (receiverError) {
+      console.error('Error fetching receiver handshakes:', receiverError);
     }
 
-    const handshakes = data || [];
-    const initiatorIds = [...new Set(handshakes.map((h) => h.initiator_user_id))];
+    // Collect all initiator user IDs for enrichment
+    const allRows = [...pendingRows, ...(receiverRows || [])];
+    const initiatorIds = [...new Set(allRows.map((h) => h.initiator_user_id as string))];
 
     const nameMap: Record<string, string> = {};
+    const emailMap: Record<string, string> = {};
     for (const uid of initiatorIds) {
       const { data: initiator } = await supabase.auth.admin.getUserById(uid);
       if (initiator?.user) {
@@ -792,19 +808,14 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
           initiator.user.user_metadata?.full_name ||
           initiator.user.email?.split('@')[0] ||
           'Someone';
+        emailMap[uid] = initiator.user.email || '';
       }
     }
 
-    const enriched = handshakes.map((h) => ({
-      id: h.id,
-      initiator_user_id: h.initiator_user_id,
-      receiver_identifier: h.receiver_identifier,
-      event_title: h.event_title,
-      event_date: h.event_date,
-      status: h.status,
-      created_at: h.created_at,
-      expires_at: h.expires_at,
-      initiator_name: nameMap[h.initiator_user_id] || 'Someone',
+    const enriched = allRows.map((h) => ({
+      ...h,
+      initiator_name: nameMap[h.initiator_user_id as string] || 'Someone',
+      initiator_email: emailMap[h.initiator_user_id as string] || '',
     }));
 
     return res.status(200).json({ handshakes: enriched });

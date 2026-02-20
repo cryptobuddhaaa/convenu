@@ -28,6 +28,7 @@ interface HandshakeState {
   getByContactId: (contactId: string) => Handshake | undefined;
   getByIdentifier: (identifier: string) => Handshake | undefined;
   getByInitiatorName: (contactName: string) => Handshake | undefined;
+  getByInitiatorEmail: (email: string) => Handshake | undefined;
   reset: () => void;
 }
 
@@ -55,6 +56,7 @@ function mapRowToHandshake(row: Record<string, unknown>): Handshake {
     createdAt: row.created_at as string,
     expiresAt: row.expires_at as string,
     ...(row.initiator_name ? { initiatorName: row.initiator_name as string } : {}),
+    ...(row.initiator_email ? { initiatorEmail: row.initiator_email as string } : {}),
   };
 }
 
@@ -214,6 +216,16 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
       (h) =>
         ['pending', 'claimed', 'matched', 'minted'].includes(h.status) &&
         h.initiatorName?.toLowerCase().trim() === normalized
+    );
+  },
+
+  getByInitiatorEmail: (email: string) => {
+    if (!email) return undefined;
+    const normalized = email.toLowerCase();
+    return get().handshakes.find(
+      (h) =>
+        ['pending', 'claimed', 'matched', 'minted'].includes(h.status) &&
+        h.initiatorEmail?.toLowerCase() === normalized
     );
   },
 

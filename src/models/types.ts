@@ -145,7 +145,8 @@ export interface Handshake {
   mintFeeLamports: number;
   createdAt: string;
   expiresAt: string;
-  initiatorName?: string; // Resolved server-side for pending handshakes (not a DB column)
+  initiatorName?: string; // Resolved server-side for receiver handshakes (not a DB column)
+  initiatorEmail?: string; // Resolved server-side for receiver handshakes (not a DB column)
 }
 
 export interface TrustScore {
