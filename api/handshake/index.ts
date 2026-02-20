@@ -511,42 +511,17 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
           const firstName = nameParts[0] || initiatorEmail?.split('@')[0] || 'Unknown';
           const lastName = nameParts.slice(1).join(' ') || '';
 
-          // contacts.itinerary_id is NOT NULL — find or create an itinerary for the receiver
-          let { data: receiverItinerary } = await supabase
-            .from('itineraries')
-            .select('id')
-            .eq('user_id', handshake.receiver_user_id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          if (!receiverItinerary) {
-            // Create a default itinerary so the contact has somewhere to live
-            const { data: newItinerary } = await supabase
-              .from('itineraries')
-              .insert({
-                user_id: handshake.receiver_user_id,
-                title: 'My Contacts',
-                data: { days: [] },
-              })
-              .select('id')
-              .single();
-            receiverItinerary = newItinerary;
-          }
-
-          if (receiverItinerary) {
-            await supabase.from('contacts').insert({
-              user_id: handshake.receiver_user_id,
-              first_name: firstName,
-              last_name: lastName,
-              telegram_handle: initiatorTg,
-              email: initiatorEmail,
-              event_title: handshake.event_title || 'Handshake',
-              event_id: handshake.event_id || 'handshake',
-              itinerary_id: receiverItinerary.id,
-              date_met: handshake.event_date || new Date().toISOString().split('T')[0],
-            });
-          }
+          await supabase.from('contacts').insert({
+            user_id: handshake.receiver_user_id,
+            first_name: firstName,
+            last_name: lastName,
+            telegram_handle: initiatorTg,
+            email: initiatorEmail,
+            event_title: handshake.event_title || 'Handshake',
+            event_id: handshake.event_id || null,
+            itinerary_id: null,
+            date_met: handshake.event_date || new Date().toISOString().split('T')[0],
+          });
         }
       } catch (contactErr) {
         // Non-critical — don't fail the handshake if contact creation fails
