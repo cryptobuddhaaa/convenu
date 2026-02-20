@@ -13,6 +13,7 @@ import { useUserWallet } from '../hooks/useUserWallet';
 import { useAuth } from '../hooks/useAuth';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 import { toast } from './Toast';
+import { authFetch } from '../lib/authFetch';
 import bs58 from 'bs58';
 
 export function WalletButton() {
@@ -223,31 +224,45 @@ export function WalletButton() {
   const isTelegramWebApp = typeof window !== 'undefined' &&
     (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
   if (isTelegramWebApp && !primaryWallet && !connected) {
-    const appUrl = window.location.origin;
     const [copied, setCopied] = useState(false);
+    const [generating, setGenerating] = useState(false);
     return (
       <div className="flex items-center gap-2">
         <button
           onClick={async () => {
+            if (generating) return;
+            setGenerating(true);
             try {
-              await navigator.clipboard.writeText(appUrl);
-              setCopied(true);
-              toast.success('Link copied! Open it in your Phantom or Solflare browser.');
-              setTimeout(() => setCopied(false), 2000);
-            } catch {
-              // Fallback: open in external browser
-              try {
-                window.Telegram?.WebApp.openLink(appUrl);
-              } catch {
-                window.open(appUrl, '_blank');
+              // Generate a one-time login link so user stays signed in
+              const response = await authFetch('/api/auth/wallet-login', { method: 'POST' });
+              if (!response.ok) {
+                throw new Error('Failed to generate login link');
               }
+              const { url } = await response.json();
+              await navigator.clipboard.writeText(url);
+              setCopied(true);
+              toast.success('Login link copied! Paste it in your Phantom or Solflare browser.');
+              setTimeout(() => setCopied(false), 3000);
+            } catch {
+              // Fallback: copy plain URL
+              try {
+                await navigator.clipboard.writeText(window.location.origin);
+                toast.info('Link copied, but you may need to sign in again in the wallet browser.');
+              } catch {
+                toast.error('Could not copy link. Please manually open the app in your wallet browser.');
+              }
+            } finally {
+              setGenerating(false);
             }
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-900/40 border border-purple-700/50 rounded-md hover:bg-purple-900/60 transition-colors"
-          title="Copy link to open in wallet browser"
-          aria-label="Copy app link for wallet browser"
+          disabled={generating}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-900/40 border border-purple-700/50 rounded-md hover:bg-purple-900/60 transition-colors disabled:opacity-50"
+          title="Copy login link for wallet browser"
+          aria-label="Copy login link for wallet browser"
         >
-          {copied ? (
+          {generating ? (
+            <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-purple-400 border-t-transparent" />
+          ) : copied ? (
             <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
@@ -256,7 +271,9 @@ export function WalletButton() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
             </svg>
           )}
-          <span className="text-xs text-purple-300">{copied ? 'Copied!' : 'Open in wallet browser'}</span>
+          <span className="text-xs text-purple-300">
+            {generating ? 'Generating...' : copied ? 'Copied!' : 'Open in wallet browser'}
+          </span>
         </button>
       </div>
     );

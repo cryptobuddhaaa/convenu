@@ -76,6 +76,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Check for wallet_login token in URL (Telegram user opening in wallet browser)
+      const urlParams = new URLSearchParams(window.location.search);
+      const walletLoginToken = urlParams.get('wallet_login');
+      if (walletLoginToken) {
+        // Clean the URL immediately
+        window.history.replaceState({}, '', window.location.pathname);
+        try {
+          const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
+            token_hash: walletLoginToken,
+            type: 'magiclink',
+          });
+          if (otpError) {
+            console.error('[Auth] Wallet login verification failed:', otpError);
+            toast.error('Login link expired or invalid. Please generate a new one.');
+          } else if (!cancelled && otpData?.session) {
+            setSession(otpData.session);
+            setUser(otpData.session.user);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error('[Auth] Wallet login error:', err);
+          toast.error('Login link failed. Please try again.');
+        }
+      }
+
       // No existing session — check if we're in a Telegram Mini App
       const initData = getTelegramInitData();
 
