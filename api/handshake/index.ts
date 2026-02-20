@@ -335,13 +335,17 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
       verifySignatures: false,
     });
 
+    // Look up the initiator's actual name for display
+    const { data: initiatorUser } = await supabase.auth.admin.getUserById(handshake.initiator_user_id);
+    const initiatorDisplayName = initiatorUser?.user?.user_metadata?.full_name
+      || initiatorUser?.user?.email?.split('@')[0]
+      || 'Someone';
+
     return res.status(200).json({
       handshakeId,
       status: 'claimed',
       transaction: Buffer.from(serialized).toString('base64'),
-      initiatorName: handshake.event_title
-        ? `Handshake from ${handshake.event_title}`
-        : 'Proof of Handshake',
+      initiatorName: `Handshake from ${initiatorDisplayName}`,
     });
   } catch (error) {
     console.error('Handshake claim error:', error);
