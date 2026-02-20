@@ -226,6 +226,33 @@ export function WalletButton() {
   if (isTelegramWebApp && !primaryWallet && !connected) {
     const [copied, setCopied] = useState(false);
     const [generating, setGenerating] = useState(false);
+
+    // Copy text to clipboard with fallbacks for iOS Telegram webview
+    const copyToClipboard = async (text: string): Promise<boolean> => {
+      // Try modern Clipboard API first
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch { /* not available in this webview */ }
+
+      // Fallback: execCommand with temporary textarea
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (ok) return true;
+      } catch { /* execCommand not supported */ }
+
+      return false;
+    };
+
     return (
       <div className="flex items-center gap-2">
         <button
@@ -239,18 +266,22 @@ export function WalletButton() {
                 throw new Error('Failed to generate login link');
               }
               const { url } = await response.json();
-              await navigator.clipboard.writeText(url);
-              setCopied(true);
-              toast.success('Login link copied! Paste it in your Phantom or Solflare browser.');
-              setTimeout(() => setCopied(false), 3000);
-            } catch {
-              // Fallback: copy plain URL
-              try {
-                await navigator.clipboard.writeText(window.location.origin);
-                toast.info('Link copied, but you may need to sign in again in the wallet browser.');
-              } catch {
-                toast.error('Could not copy link. Please manually open the app in your wallet browser.');
+              const didCopy = await copyToClipboard(url);
+              if (didCopy) {
+                setCopied(true);
+                toast.success('Login link copied! Paste it in your Phantom or Solflare browser.');
+                setTimeout(() => setCopied(false), 3000);
+              } else {
+                // Last resort: open login link directly in external browser
+                try {
+                  window.Telegram?.WebApp.openLink(url);
+                  toast.info('Opening in browser. Copy the URL from the address bar, then paste in your wallet browser.');
+                } catch {
+                  toast.error('Could not copy link. Please manually open the app in your wallet browser.');
+                }
               }
+            } catch {
+              toast.error('Failed to generate login link. Please try again.');
             } finally {
               setGenerating(false);
             }
