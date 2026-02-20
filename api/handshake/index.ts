@@ -5,13 +5,6 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import {
-  Connection,
-  PublicKey,
-  Transaction,
-  SystemProgram,
-  LAMPORTS_PER_SOL,
-} from '@solana/web3.js';
 import { requireAuth } from '../_lib/auth';
 
 const supabase = createClient(
@@ -21,18 +14,14 @@ const supabase = createClient(
 
 const SOLANA_RPC = process.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
 const TREASURY_WALLET = process.env.VITE_TREASURY_WALLET || '';
-const MINT_FEE_LAMPORTS = 0.01 * LAMPORTS_PER_SOL;
+const MINT_FEE_LAMPORTS = 10_000_000; // 0.01 SOL
 const POINTS_PER_HANDSHAKE = 10;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Base58 check for Solana addresses (32-44 chars, no 0/O/I/l)
 function isValidWalletAddress(addr: string): boolean {
-  try {
-    new PublicKey(addr);
-    return true;
-  } catch {
-    return false;
-  }
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr);
 }
 
 // ──────────────────────────────────────────────
@@ -44,27 +33,28 @@ async function handleInitiate(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const authUser = await requireAuth(req, res);
-  if (!authUser) return;
-  const userId = authUser.id;
-
-  const { contactId, walletAddress } = req.body || {};
-
-  if (!contactId || !walletAddress) {
-    return res.status(400).json({ error: 'contactId and walletAddress required' });
-  }
-  if (!UUID_RE.test(contactId)) {
-    return res.status(400).json({ error: 'Invalid contactId format' });
-  }
-  if (!isValidWalletAddress(walletAddress)) {
-    return res.status(400).json({ error: 'Invalid wallet address' });
-  }
-
-  if (!TREASURY_WALLET) {
-    return res.status(500).json({ error: 'Treasury wallet not configured' });
-  }
-
   try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    const userId = authUser.id;
+
+    const { contactId, walletAddress } = req.body || {};
+
+    if (!contactId || !walletAddress) {
+      return res.status(400).json({ error: 'contactId and walletAddress required' });
+    }
+    if (!UUID_RE.test(contactId)) {
+      return res.status(400).json({ error: 'Invalid contactId format' });
+    }
+    if (!isValidWalletAddress(walletAddress)) {
+      return res.status(400).json({ error: 'Invalid wallet address' });
+    }
+
+    if (!TREASURY_WALLET) {
+      return res.status(500).json({ error: 'Treasury wallet not configured' });
+    }
+
+    const { Connection, PublicKey, Transaction, SystemProgram } = await import('@solana/web3.js');
     const { data: contact, error: contactError } = await supabase
       .from('contacts')
       .select('id, first_name, last_name, telegram_handle, email, event_id, event_title, date_met')
@@ -231,27 +221,28 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const authUser = await requireAuth(req, res);
-  if (!authUser) return;
-  const userId = authUser.id;
-
-  const { handshakeId, walletAddress } = req.body || {};
-
-  if (!handshakeId || !walletAddress) {
-    return res.status(400).json({ error: 'handshakeId and walletAddress required' });
-  }
-  if (!UUID_RE.test(handshakeId)) {
-    return res.status(400).json({ error: 'Invalid handshakeId format' });
-  }
-  if (!isValidWalletAddress(walletAddress)) {
-    return res.status(400).json({ error: 'Invalid wallet address' });
-  }
-
-  if (!TREASURY_WALLET) {
-    return res.status(500).json({ error: 'Treasury wallet not configured' });
-  }
-
   try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    const userId = authUser.id;
+
+    const { handshakeId, walletAddress } = req.body || {};
+
+    if (!handshakeId || !walletAddress) {
+      return res.status(400).json({ error: 'handshakeId and walletAddress required' });
+    }
+    if (!UUID_RE.test(handshakeId)) {
+      return res.status(400).json({ error: 'Invalid handshakeId format' });
+    }
+    if (!isValidWalletAddress(walletAddress)) {
+      return res.status(400).json({ error: 'Invalid wallet address' });
+    }
+
+    if (!TREASURY_WALLET) {
+      return res.status(500).json({ error: 'Treasury wallet not configured' });
+    }
+
+    const { Connection, PublicKey, Transaction, SystemProgram } = await import('@solana/web3.js');
     const { data: handshake, error: hsError } = await supabase
       .from('handshakes')
       .select('*')
@@ -367,19 +358,20 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const authUser = await requireAuth(req, res);
-  if (!authUser) return;
-
-  const { handshakeId, signedTransaction, side } = req.body || {};
-
-  if (!handshakeId || !signedTransaction || !['initiator', 'receiver'].includes(side)) {
-    return res.status(400).json({ error: 'handshakeId, signedTransaction, and side (initiator|receiver) required' });
-  }
-  if (!UUID_RE.test(handshakeId)) {
-    return res.status(400).json({ error: 'Invalid handshakeId format' });
-  }
-
   try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+
+    const { handshakeId, signedTransaction, side } = req.body || {};
+
+    if (!handshakeId || !signedTransaction || !['initiator', 'receiver'].includes(side)) {
+      return res.status(400).json({ error: 'handshakeId, signedTransaction, and side (initiator|receiver) required' });
+    }
+    if (!UUID_RE.test(handshakeId)) {
+      return res.status(400).json({ error: 'Invalid handshakeId format' });
+    }
+
+    const { Connection, Transaction, SystemProgram } = await import('@solana/web3.js');
     const { data: handshake, error: hsError } = await supabase
       .from('handshakes')
       .select('*')
@@ -553,25 +545,24 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const authUser = await requireAuth(req, res);
-  if (!authUser) return;
-
-  const { handshakeId } = req.body || {};
-  if (!handshakeId) {
-    return res.status(400).json({ error: 'handshakeId required' });
-  }
-  if (!UUID_RE.test(handshakeId)) {
-    return res.status(400).json({ error: 'Invalid handshakeId format' });
-  }
-
-  const TREE_KEYPAIR_BASE58 = process.env.HANDSHAKE_TREE_KEYPAIR || '';
-  const MERKLE_TREE_ADDRESS = process.env.HANDSHAKE_MERKLE_TREE || '';
-
-  if (!TREE_KEYPAIR_BASE58 || !MERKLE_TREE_ADDRESS) {
-    return res.status(500).json({ error: 'Merkle tree not configured' });
-  }
-
   try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+
+    const { handshakeId } = req.body || {};
+    if (!handshakeId) {
+      return res.status(400).json({ error: 'handshakeId required' });
+    }
+    if (!UUID_RE.test(handshakeId)) {
+      return res.status(400).json({ error: 'Invalid handshakeId format' });
+    }
+
+    const TREE_KEYPAIR_BASE58 = process.env.HANDSHAKE_TREE_KEYPAIR || '';
+    const MERKLE_TREE_ADDRESS = process.env.HANDSHAKE_MERKLE_TREE || '';
+
+    if (!TREE_KEYPAIR_BASE58 || !MERKLE_TREE_ADDRESS) {
+      return res.status(500).json({ error: 'Merkle tree not configured' });
+    }
     // Dynamic imports to avoid loading heavy deps for non-mint actions
     const { createUmi } = await import('@metaplex-foundation/umi-bundle-defaults');
     const { mintV1, mplBubblegum } = await import('@metaplex-foundation/mpl-bubblegum');
@@ -748,11 +739,10 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const authUser = await requireAuth(req, res);
-  if (!authUser) return;
-  const userId = authUser.id;
-
   try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    const userId = authUser.id;
     const { data: telegramLink } = await supabase
       .from('telegram_links')
       .select('telegram_username')
@@ -829,20 +819,25 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
 // ──────────────────────────────────────────────
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const action = req.query.action as string;
+  try {
+    const action = req.query.action as string;
 
-  switch (action) {
-    case 'initiate':
-      return handleInitiate(req, res);
-    case 'claim':
-      return handleClaim(req, res);
-    case 'confirm-tx':
-      return handleConfirmTx(req, res);
-    case 'mint':
-      return handleMint(req, res);
-    case 'pending':
-      return handlePending(req, res);
-    default:
-      return res.status(400).json({ error: 'Unknown action. Use ?action=initiate|claim|confirm-tx|mint|pending' });
+    switch (action) {
+      case 'initiate':
+        return await handleInitiate(req, res);
+      case 'claim':
+        return await handleClaim(req, res);
+      case 'confirm-tx':
+        return await handleConfirmTx(req, res);
+      case 'mint':
+        return await handleMint(req, res);
+      case 'pending':
+        return await handlePending(req, res);
+      default:
+        return res.status(400).json({ error: 'Unknown action. Use ?action=initiate|claim|confirm-tx|mint|pending' });
+    }
+  } catch (error) {
+    console.error('Handshake handler error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }

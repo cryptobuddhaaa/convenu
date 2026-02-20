@@ -6,7 +6,6 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { PublicKey } from '@solana/web3.js';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { requireAuth } from '../_lib/auth';
@@ -21,17 +20,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const authUser = await requireAuth(req, res);
-  if (!authUser) return;
-
-  const { walletId, signature, message, walletAddress } = req.body || {};
-
-  if (!walletId || !signature || !message || !walletAddress) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
   try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+
+    const { walletId, signature, message, walletAddress } = req.body || {};
+
+    if (!walletId || !signature || !message || !walletAddress) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
     // Verify the signature
+    const { PublicKey } = await import('@solana/web3.js');
     const publicKey = new PublicKey(walletAddress);
     const messageBytes = new TextEncoder().encode(message);
     const signatureBytes = bs58.decode(signature);
