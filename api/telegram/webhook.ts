@@ -3393,15 +3393,17 @@ async function handlePoints(chatId: number, telegramUserId: number) {
     return;
   }
 
-  // Get total points
+  // Get accurate total from DB function (sums ALL points, not just recent)
+  const { data: totalData } = await supabase.rpc('get_user_total_points', { p_user_id: userId });
+  const total = (typeof totalData === 'number' ? totalData : 0);
+
+  // Get recent entries for display
   const { data: points } = await supabase
     .from('user_points')
     .select('points, reason, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(10);
-
-  const total = points?.reduce((sum: number, p: { points: number }) => sum + p.points, 0) || 0;
 
   let msg = `🏆 <b>Your Points: ${total}</b>\n\n`;
 

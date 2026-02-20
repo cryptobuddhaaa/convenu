@@ -719,11 +719,11 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
 
         await supabase
           .from('trust_scores')
-          .update({
+          .upsert({
+            user_id: uid,
             total_handshakes: count || 0,
             updated_at: new Date().toISOString(),
-          })
-          .eq('user_id', uid);
+          }, { onConflict: 'user_id' });
       }
     }
 

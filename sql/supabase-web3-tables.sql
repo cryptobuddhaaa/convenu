@@ -92,6 +92,10 @@ CREATE TABLE IF NOT EXISTS user_points (
 
 CREATE INDEX IF NOT EXISTS idx_user_points_user ON user_points (user_id);
 
+-- Prevent double-awarding points for the same handshake to the same user
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_points_handshake_user
+  ON user_points (handshake_id, user_id) WHERE handshake_id IS NOT NULL;
+
 ALTER TABLE user_points ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own points"

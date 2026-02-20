@@ -180,3 +180,7 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Points bug fix: prevent double-awarding via unique constraint
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_points_handshake_user
+  ON user_points (handshake_id, user_id) WHERE handshake_id IS NOT NULL;
