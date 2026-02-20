@@ -88,10 +88,9 @@ CREATE POLICY "Users can view their own usage"
   ON ai_usage FOR SELECT
   USING (auth.uid() = user_id);
 
+-- No INSERT policy for ai_usage — usage tracking should be done server-side only.
+-- This prevents users from manipulating their own usage records to bypass limits.
 DROP POLICY IF EXISTS "Users can insert their own usage" ON ai_usage;
-CREATE POLICY "Users can insert their own usage"
-  ON ai_usage FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
 
 -- ============================================================================
 -- AI CONVERSATIONS TABLE
@@ -127,7 +126,8 @@ CREATE POLICY "Users can insert their own conversations"
 DROP POLICY IF EXISTS "Users can update their own conversations" ON ai_conversations;
 CREATE POLICY "Users can update their own conversations"
   ON ai_conversations FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can delete their own conversations" ON ai_conversations;
 CREATE POLICY "Users can delete their own conversations"
@@ -151,6 +151,11 @@ RETURNS TEXT AS $$
 DECLARE
   v_tier TEXT;
 BEGIN
+  -- Only allow querying own tier (service role bypasses this via NULL auth.uid())
+  IF auth.uid() IS NOT NULL AND auth.uid() != p_user_id THEN
+    RAISE EXCEPTION 'Access denied: can only query own tier';
+  END IF;
+
   SELECT tier INTO v_tier
   FROM subscriptions
   WHERE user_id = p_user_id
@@ -170,6 +175,10 @@ DECLARE
   v_usage_count INTEGER;
   v_limit INTEGER;
 BEGIN
+  IF auth.uid() IS NOT NULL AND auth.uid() != p_user_id THEN
+    RAISE EXCEPTION 'Access denied: can only check own usage';
+  END IF;
+
   -- Get user's tier
   v_tier := get_user_tier(p_user_id);
 
@@ -255,6 +264,10 @@ DECLARE
   v_failed_queries_percent DECIMAL;
   v_account_age INTERVAL;
 BEGIN
+  IF auth.uid() IS NOT NULL AND auth.uid() != p_user_id THEN
+    RAISE EXCEPTION 'Access denied: can only check own abuse patterns';
+  END IF;
+
   -- Check queries in last hour
   SELECT COUNT(*) INTO v_queries_last_hour
   FROM ai_usage

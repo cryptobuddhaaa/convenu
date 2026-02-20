@@ -18,7 +18,10 @@ export const lumaService = {
   isLumaUrl(url: string): boolean {
     try {
       const urlObj = new URL(url);
-      return urlObj.hostname.includes('lu.ma') || urlObj.hostname.includes('luma.com');
+      // Use exact domain matching to prevent SSRF via subdomains like lu.ma.evil.com
+      const host = urlObj.hostname;
+      return host === 'lu.ma' || host === 'www.lu.ma' ||
+             host === 'luma.com' || host === 'www.luma.com';
     } catch {
       return false;
     }

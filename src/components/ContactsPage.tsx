@@ -177,8 +177,12 @@ export default function ContactsPage() {
       headers.join(','),
       ...rows.map((row) =>
         row.map((cell) => {
+          let cellStr = String(cell);
+          // Prevent CSV formula injection: prefix dangerous characters with a single quote
+          if (/^[=+\-@\t\r]/.test(cellStr)) {
+            cellStr = `'${cellStr}`;
+          }
           // Escape cells that contain commas, quotes, or newlines
-          const cellStr = String(cell);
           if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
             return `"${cellStr.replace(/"/g, '""')}"`;
           }

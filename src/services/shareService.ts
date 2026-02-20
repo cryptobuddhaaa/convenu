@@ -13,7 +13,9 @@ export const shareService = {
    * Compress itinerary to URL-safe string (legacy method for backwards compatibility)
    */
   compressItinerary(itinerary: Itinerary): string {
-    const json = JSON.stringify(itinerary);
+    // Strip sensitive fields before embedding in URL
+    const { createdByEmail: _email, ...safeItinerary } = itinerary as Itinerary & { createdByEmail?: string };
+    const json = JSON.stringify(safeItinerary);
     return compressToEncodedURIComponent(json);
   },
 
@@ -24,7 +26,12 @@ export const shareService = {
     try {
       const json = decompressFromEncodedURIComponent(compressed);
       if (!json) return null;
-      return JSON.parse(json) as Itinerary;
+      const parsed = JSON.parse(json);
+      // Basic validation: ensure required fields exist and are correct types
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (typeof parsed.title !== 'string' || typeof parsed.startDate !== 'string') return null;
+      if (!Array.isArray(parsed.days)) return null;
+      return parsed as Itinerary;
     } catch (error) {
       console.error('Failed to decompress itinerary:', error);
       return null;
@@ -138,7 +145,7 @@ export const shareService = {
           return null;
         }
 
-        // Fetch the actual itinerary with all its data
+        // Fetch the actual itinerary with all its data (exclude created_by_email for privacy)
         const { data: itineraryData, error: itineraryError } = await supabase
           .from('itineraries')
           .select(`
@@ -149,7 +156,6 @@ export const shareService = {
             end_date,
             data,
             created_by_name,
-            created_by_email,
             created_at,
             updated_at
           `)
@@ -187,7 +193,7 @@ export const shareService = {
           days,
           transitSegments: itineraryData.data.transitSegments || [],
           createdByName: itineraryData.created_by_name || 'Unknown',
-          createdByEmail: itineraryData.created_by_email,
+          createdByEmail: undefined, // Don't expose email in shared views
           createdAt: itineraryData.created_at,
           updatedAt: itineraryData.updated_at,
         };

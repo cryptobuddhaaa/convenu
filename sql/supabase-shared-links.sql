@@ -60,6 +60,13 @@ CREATE POLICY "Users can update their own share links"
       WHERE itineraries.id = shared_itineraries.itinerary_id
       AND itineraries.user_id = auth.uid()
     )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM itineraries
+      WHERE itineraries.id = shared_itineraries.itinerary_id
+      AND itineraries.user_id = auth.uid()
+    )
   );
 
 -- Generate a cryptographically secure random ID (16 chars, base36)

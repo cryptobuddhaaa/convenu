@@ -30,6 +30,22 @@ function truncateInput(text: string, maxLen = 500): string {
   return text.length > maxLen ? text.slice(0, maxLen) : text;
 }
 
+/** Validate that a URL uses a safe scheme (http/https only) */
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** Validate and sanitize a Telegram handle for use in tg://resolve URLs */
+function sanitizeHandle(handle: string): string {
+  // Only allow alphanumeric + underscores (valid Telegram usernames)
+  return handle.replace(/[^a-zA-Z0-9_]/g, '');
+}
+
 // Webhook secret derived from bot token
 const WEBHOOK_SECRET = crypto
   .createHash('sha256')
@@ -101,12 +117,36 @@ interface LumaEventData {
 
 async function fetchLumaEvent(lumaUrl: string): Promise<LumaEventData | null> {
   try {
-    const apiUrl = `${WEBAPP_URL}/api/fetch-luma?url=${encodeURIComponent(lumaUrl)}`;
-    const response = await fetch(apiUrl);
+    // Fetch Luma page directly (server-side, no CORS) instead of calling /api/fetch-luma
+    // which requires auth that the webhook handler doesn't have
+    const response = await fetch(lumaUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; ShareableItinerary/1.0)',
+        'Accept': 'text/html',
+      },
+    });
     if (!response.ok) return null;
-    const data = await response.json() as LumaEventData | null;
-    if (!data || !data.title) return null;
-    return data;
+    const html = await response.text();
+
+    // Parse JSON-LD from the HTML
+    const jsonLdMatch = html.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
+    if (!jsonLdMatch) return null;
+    const jsonLd = JSON.parse(jsonLdMatch[1]) as Record<string, unknown>;
+
+    const title = (jsonLd.name as string) || '';
+    if (!title) return null;
+
+    const loc = jsonLd.location as Record<string, unknown> | undefined;
+    const locName = (loc?.name as string) || '';
+    const addr = loc?.address as Record<string, unknown> | string | undefined;
+    const locAddress = typeof addr === 'string' ? addr : (addr?.streetAddress as string) || '';
+
+    return {
+      title,
+      startTime: (jsonLd.startDate as string) || undefined,
+      endTime: (jsonLd.endDate as string) || undefined,
+      location: { name: locName, address: locAddress },
+    };
   } catch {
     return null;
   }
@@ -480,7 +520,7 @@ async function handleItinerarySelection(
   if (events.length === 0) {
     await sendMessage(
       chatId,
-      `📅 No events found in "${itinerary.title}". Add events in the web app first.`
+      `📅 No events found in "${escapeHtml(itinerary.title)}". Add events in the web app first.`
     );
     await clearState(telegramUserId);
     return;
@@ -513,7 +553,7 @@ async function handleItinerarySelection(
 
   await sendMessage(
     chatId,
-    `📅 Select the event from <b>${itinerary.title}</b>:`,
+    `📅 Select the event from <b>${escapeHtml(itinerary.title)}</b>:`,
     { reply_markup: { inline_keyboard: keyboard } }
   );
 }
@@ -583,7 +623,7 @@ async function handleEventSelection(
 
     await sendMessage(
       chatId,
-      `📝 Adding contact to: <b>${selectedEvent.title}</b>\n\n` +
+      `📝 Adding contact to: <b>${escapeHtml(selectedEvent.title)}</b>\n\n` +
         'Enter their <b>Telegram handle</b> (required):\n' +
         '<i>e.g. @johndoe</i>'
     );
@@ -761,20 +801,20 @@ async function showContactConfirmation(
 
   let summary = '<b>📋 Confirm new contact:</b>\n\n';
   if (itineraryTitle && eventTitle) {
-    summary += `📍 ${itineraryTitle} → ${eventTitle}\n\n`;
+    summary += `📍 ${escapeHtml(itineraryTitle)} → ${escapeHtml(eventTitle)}\n\n`;
   } else if (itineraryTitle) {
-    summary += `📍 ${itineraryTitle}\n\n`;
+    summary += `📍 ${escapeHtml(itineraryTitle)}\n\n`;
   } else {
     summary += '📍 Standalone contact\n\n';
   }
-  summary += `💬 Telegram: ${contact.telegramHandle}\n`;
-  summary += `👤 Name: ${contact.firstName}`;
-  if (contact.lastName) summary += ` ${contact.lastName}`;
+  summary += `💬 Telegram: ${escapeHtml(contact.telegramHandle)}\n`;
+  summary += `👤 Name: ${escapeHtml(contact.firstName)}`;
+  if (contact.lastName) summary += ` ${escapeHtml(contact.lastName)}`;
   summary += '\n';
-  if (contact.projectCompany) summary += `🏢 Company: ${contact.projectCompany}\n`;
-  if (contact.position) summary += `💼 Position: ${contact.position}\n`;
-  if (contact.notes) summary += `📝 Notes: ${contact.notes}\n`;
-  if (selectedTags.length > 0) summary += `🏷 Labels: ${selectedTags.join(', ')}\n`;
+  if (contact.projectCompany) summary += `🏢 Company: ${escapeHtml(contact.projectCompany)}\n`;
+  if (contact.position) summary += `💼 Position: ${escapeHtml(contact.position)}\n`;
+  if (contact.notes) summary += `📝 Notes: ${escapeHtml(contact.notes)}\n`;
+  if (selectedTags.length > 0) summary += `🏷 Labels: ${selectedTags.map(escapeHtml).join(', ')}\n`;
 
   await setState(telegramUserId, 'confirm', stateData);
 
@@ -980,8 +1020,8 @@ async function handleContactConfirmation(
   await sendMessage(
     chatId,
     `✅ Contact saved!\n\n` +
-      `<b>${displayName}</b>${company}\n` +
-      (eventTitle ? `→ ${eventTitle}\n\n` : '\n') +
+      `<b>${escapeHtml(displayName)}</b>${escapeHtml(company)}\n` +
+      (eventTitle ? `→ ${escapeHtml(eventTitle)}\n\n` : '\n') +
       'Use /newcontact to add another contact.',
     {
       reply_markup: {
@@ -1097,7 +1137,7 @@ async function handleItineraryView(
       }
     }
 
-    let message = `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location} · ${startFmt} – ${endFmt}\n${allEvents.length} event${allEvents.length !== 1 ? 's' : ''}\n\n`;
+    let message = `📅 <b>${escapeHtml(itinerary.title)}</b>\n📍 ${escapeHtml(itinerary.location)} · ${startFmt} – ${endFmt}\n${allEvents.length} event${allEvents.length !== 1 ? 's' : ''}\n\n`;
     message += formatEventList(allEvents);
 
     await sendMessage(chatId, message, {
@@ -1133,7 +1173,7 @@ async function handleItineraryView(
     const dateFmt = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
     if (dayEvents.length === 0) {
-      await sendMessage(chatId, `📅 <b>${itinerary.title}</b>\n📆 ${dateFmt}\n\nNo events on this day.`, {
+      await sendMessage(chatId, `📅 <b>${escapeHtml(itinerary.title)}</b>\n📆 ${dateFmt}\n\nNo events on this day.`, {
         reply_markup: {
           inline_keyboard: [
             [{ text: '◀️ Back to dates', callback_data: `iv:${itineraryId}` }],
@@ -1143,7 +1183,7 @@ async function handleItineraryView(
       return;
     }
 
-    let message = `📅 <b>${itinerary.title}</b>\n📆 ${dateFmt}\n${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}\n\n`;
+    let message = `📅 <b>${escapeHtml(itinerary.title)}</b>\n📆 ${dateFmt}\n${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}\n\n`;
     message += formatEventList(dayEvents);
 
     await sendMessage(chatId, message, {
@@ -1162,12 +1202,12 @@ async function handleItineraryView(
 
   if (totalEvents === 0) {
     await sendMessage(chatId,
-      `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location}\n${startFmt} – ${endFmt}\n\nNo events yet. Add events with /newevent.`
+      `📅 <b>${escapeHtml(itinerary.title)}</b>\n📍 ${escapeHtml(itinerary.location)}\n${startFmt} – ${endFmt}\n\nNo events yet. Add events with /newevent.`
     );
     return;
   }
 
-  let message = `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location} · ${startFmt} – ${endFmt}\n${totalEvents} event${totalEvents !== 1 ? 's' : ''}\n\nSelect a date to see its events:`;
+  let message = `📅 <b>${escapeHtml(itinerary.title)}</b>\n📍 ${escapeHtml(itinerary.location)} · ${startFmt} – ${endFmt}\n${totalEvents} event${totalEvents !== 1 ? 's' : ''}\n\nSelect a date to see its events:`;
 
   // Build date buttons — 2 per row
   const keyboard: Array<Array<{ text: string; callback_data?: string; web_app?: { url: string } }>> = [];
@@ -1274,24 +1314,24 @@ function formatEventList(events: ParsedEvent[]): string {
       }
     }
 
-    message += `\n📌 <b>${ev.title}</b>`;
+    message += `\n📌 <b>${escapeHtml(ev.title)}</b>`;
     if (ev.itineraryTitle && events.some((e) => e.itineraryTitle !== ev.itineraryTitle)) {
       // Show itinerary name only if events span multiple itineraries (today's view)
-      message += ` <i>(${ev.itineraryTitle})</i>`;
+      message += ` <i>(${escapeHtml(ev.itineraryTitle)})</i>`;
     }
     message += '\n';
     if (timeStr) message += `    🕐 ${timeStr}\n`;
 
     if (ev.location?.name) {
-      message += `    📍 ${ev.location.name}`;
-      if (ev.location.mapsUrl) {
-        message += ` — <a href="${ev.location.mapsUrl}">Map</a>`;
+      message += `    📍 ${escapeHtml(ev.location.name)}`;
+      if (ev.location.mapsUrl && isSafeUrl(ev.location.mapsUrl)) {
+        message += ` — <a href="${escapeHtml(ev.location.mapsUrl)}">Map</a>`;
       }
       message += '\n';
     }
 
-    if (ev.lumaEventUrl) {
-      message += `    🔗 <a href="${ev.lumaEventUrl}">Luma Event</a>\n`;
+    if (ev.lumaEventUrl && isSafeUrl(ev.lumaEventUrl)) {
+      message += `    🔗 <a href="${escapeHtml(ev.lumaEventUrl)}">Luma Event</a>\n`;
     }
   }
 
@@ -1442,8 +1482,8 @@ async function showItineraryConfirmation(
   const fmtEnd = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   let summary = '<b>📋 Confirm new itinerary:</b>\n\n';
-  summary += `🏷 Title: ${it.title}\n`;
-  summary += `📍 Location: ${it.location}\n`;
+  summary += `🏷 Title: ${escapeHtml(it.title)}\n`;
+  summary += `📍 Location: ${escapeHtml(it.location)}\n`;
   summary += `📅 Dates: ${fmtStart} — ${fmtEnd} (${diffDays} day${diffDays !== 1 ? 's' : ''})\n`;
 
   await setState(telegramUserId, 'new_it_confirm', stateData);
@@ -1533,8 +1573,8 @@ async function handleItineraryConfirmation(
   await sendMessage(
     chatId,
     `✅ Itinerary created!\n\n` +
-      `<b>${it.title}</b>\n` +
-      `📍 ${it.location}\n` +
+      `<b>${escapeHtml(it.title)}</b>\n` +
+      `📍 ${escapeHtml(it.location)}\n` +
       `📅 ${diffDays} day${diffDays !== 1 ? 's' : ''}\n\n` +
       'Use /newevent to add events, or /newcontact to add contacts.',
     {
@@ -1700,7 +1740,7 @@ async function handleNewEventItSelection(
 
   await sendMessage(
     chatId,
-    `📅 Select a day from <b>${itinerary.title}</b>:`,
+    `📅 Select a day from <b>${escapeHtml(itinerary.title)}</b>:`,
     { reply_markup: { inline_keyboard: keyboard } }
   );
 }
@@ -1808,14 +1848,14 @@ async function handleLumaInput(
     }
 
     if (!eventData.startTime) {
-      results.push(`❌ <b>${eventData.title}</b> — no date/time found`);
+      results.push(`❌ <b>${escapeHtml(eventData.title)}</b> — no date/time found`);
       continue;
     }
 
     // Parse the event's date
     const eventStart = new Date(eventData.startTime);
     if (isNaN(eventStart.getTime())) {
-      results.push(`❌ <b>${eventData.title}</b> — invalid date`);
+      results.push(`❌ <b>${escapeHtml(eventData.title)}</b> — invalid date`);
       continue;
     }
 
@@ -1825,7 +1865,7 @@ async function handleLumaInput(
     if (eventDateStr < itStartDate || eventDateStr > itEndDate) {
       const fmtDate = eventStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       results.push(
-        `⏭ <b>${eventData.title}</b> — ${fmtDate} is outside the trip dates (${itStartDate} to ${itEndDate})`
+        `⏭ <b>${escapeHtml(eventData.title)}</b> — ${fmtDate} is outside the trip dates (${itStartDate} to ${itEndDate})`
       );
       continue;
     }
@@ -1838,14 +1878,14 @@ async function handleLumaInput(
       )
     );
     if (isDuplicate) {
-      results.push(`⏭ <b>${eventData.title}</b> — already in this itinerary`);
+      results.push(`⏭ <b>${escapeHtml(eventData.title)}</b> — already in this itinerary`);
       continue;
     }
 
     // Find the matching day
     const dayIndex = itData.days.findIndex((d) => d.date === eventDateStr);
     if (dayIndex === -1) {
-      results.push(`⏭ <b>${eventData.title}</b> — no matching day found`);
+      results.push(`⏭ <b>${escapeHtml(eventData.title)}</b> — no matching day found`);
       continue;
     }
 
@@ -1882,7 +1922,7 @@ async function handleLumaInput(
     addedCount++;
 
     const fmtDate = eventStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    results.push(`✅ <b>${eventData.title}</b> — added to ${fmtDate} (${startTimeStr}–${endTimeStr})`);
+    results.push(`✅ <b>${escapeHtml(eventData.title)}</b> — added to ${fmtDate} (${startTimeStr}–${endTimeStr})`);
   }
 
   // Save if any events were added
@@ -2086,12 +2126,12 @@ async function showEventConfirmation(
   });
 
   let summary = '<b>📋 Confirm new event:</b>\n\n';
-  summary += `📅 ${itTitle} → ${fmtDate}\n\n`;
-  summary += `🏷 Title: ${ev.title}\n`;
+  summary += `📅 ${escapeHtml(itTitle)} → ${fmtDate}\n\n`;
+  summary += `🏷 Title: ${escapeHtml(ev.title)}\n`;
   summary += `🎯 Type: ${getEventTypeLabel(ev.eventType)}\n`;
   summary += `🕐 Time: ${ev.startTime} — ${ev.endTime}\n`;
   if (ev.locationName) {
-    summary += `📍 Location: ${ev.locationName}\n`;
+    summary += `📍 Location: ${escapeHtml(ev.locationName)}\n`;
   }
 
   await setState(telegramUserId, 'new_ev_confirm', stateData);
@@ -2220,10 +2260,10 @@ async function handleEventConfirmation(
   await sendMessage(
     chatId,
     `✅ Event added!\n\n` +
-      `<b>${ev.title}</b>\n` +
+      `<b>${escapeHtml(ev.title)}</b>\n` +
       `${getEventTypeLabel(ev.eventType)} · ${ev.startTime} — ${ev.endTime}\n` +
       `📅 ${fmtDate}\n` +
-      (ev.locationName ? `📍 ${ev.locationName}\n` : '') +
+      (ev.locationName ? `📍 ${escapeHtml(ev.locationName)}\n` : '') +
       '\nUse /newevent to add another event, or /newcontact to add a contact.',
     {
       reply_markup: {
@@ -2395,9 +2435,9 @@ async function handleForwardedMessage(
     });
 
     await sendMessage(chatId,
-      `<b>📋 ${cName}</b> is already in your contacts.\n\n` +
+      `<b>📋 ${escapeHtml(cName)}</b> is already in your contacts.\n\n` +
       `Would you like to add a note from this message?\n` +
-      `📝 <i>"${preview}"</i>`,
+      `📝 <i>"${escapeHtml(preview)}"</i>`,
       {
         reply_markup: {
           inline_keyboard: [
@@ -2477,10 +2517,10 @@ async function handleForwardedMessage(
 
   // Show event confirmation step before contact confirmation
   let summary = '<b>📋 Quick-add contact from forwarded message:</b>\n\n';
-  summary += `👤 Name: ${firstName}`;
-  if (lastName) summary += ` ${lastName}`;
+  summary += `👤 Name: ${escapeHtml(firstName)}`;
+  if (lastName) summary += ` ${escapeHtml(lastName)}`;
   summary += '\n';
-  if (telegramHandle) summary += `💬 Telegram: ${telegramHandle}\n`;
+  if (telegramHandle) summary += `💬 Telegram: ${escapeHtml(telegramHandle)}\n`;
   if (!telegramHandle) summary += '⚠️ No username available (privacy restricted)\n';
   summary += '\n';
 
@@ -2490,7 +2530,7 @@ async function handleForwardedMessage(
     const fmtDate = matchedEventDate
       ? new Date(matchedEventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       : '';
-    summary += `📍 Matched event: <b>${matchedEventTitle}</b>`;
+    summary += `📍 Matched event: <b>${escapeHtml(matchedEventTitle)}</b>`;
     if (fmtDate) summary += ` (${fmtDate})`;
     summary += '\n\nIs this the right event?';
 
@@ -2632,7 +2672,7 @@ async function handleForwardNoteChoice(
     if (count !== null && count >= 10) {
       await clearState(telegramUserId);
       await sendMessage(chatId,
-        `⚠️ ${contactName} already has 10 notes (maximum). Delete some in the web app to add more.`
+        `⚠️ ${escapeHtml(contactName)} already has 10 notes (maximum). Delete some in the web app to add more.`
       );
       return;
     }
@@ -2649,7 +2689,7 @@ async function handleForwardNoteChoice(
       await sendMessage(chatId, '❌ Failed to save note. Please try again.');
     } else {
       await sendMessage(chatId,
-        `✅ Note added to <b>${contactName}</b>:\n📝 <i>"${noteContent}"</i>`
+        `✅ Note added to <b>${escapeHtml(contactName)}</b>:\n📝 <i>"${escapeHtml(noteContent)}"</i>`
       );
     }
     return;
@@ -2715,7 +2755,7 @@ async function handleForwardNoteChoice(
     if (matchedEventId) {
       await setState(telegramUserId, 'forward_event_choice', stateData);
       await sendMessage(chatId,
-        `📅 Matched event: <b>${matchedEventTitle}</b> (${matchedEventDate})\n\nIs this the right event?`,
+        `📅 Matched event: <b>${escapeHtml(matchedEventTitle || '')}</b> (${matchedEventDate})\n\nIs this the right event?`,
         {
           reply_markup: {
             inline_keyboard: [
@@ -2942,14 +2982,14 @@ async function showContactsList(
 
   for (const c of contacts) {
     const cId = c.id as string;
-    const name = `${c.first_name} ${c.last_name || ''}`.trim();
-    const company = c.project_company ? ` — ${c.project_company}` : '';
-    const handle = c.telegram_handle ? c.telegram_handle.replace('@', '') : '';
+    const name = escapeHtml(`${c.first_name} ${c.last_name || ''}`.trim());
+    const company = c.project_company ? ` — ${escapeHtml(c.project_company)}` : '';
+    const handle = c.telegram_handle ? sanitizeHandle(c.telegram_handle.replace('@', '')) : '';
 
     message += `👤 <b>${name}</b>${company}\n`;
 
     if (handle) {
-      message += `    💬 <a href="tg://resolve?domain=${handle}">@${handle}</a>`;
+      message += `    💬 <a href="tg://resolve?domain=${handle}">@${escapeHtml(handle)}</a>`;
     }
 
     if (c.last_contacted_at) {
@@ -2961,12 +3001,12 @@ async function showContactsList(
     message += '\n';
 
     if (c.event_title) {
-      message += `    📍 ${c.event_title}\n`;
+      message += `    📍 ${escapeHtml(c.event_title)}\n`;
     }
 
     const cTags = Array.isArray(c.tags) ? c.tags as string[] : [];
     if (cTags.length > 0) {
-      message += `    🏷 ${cTags.join(', ')}\n`;
+      message += `    🏷 ${cTags.map(escapeHtml).join(', ')}\n`;
     }
 
     const notes = notesByContact.get(cId);
@@ -2974,7 +3014,7 @@ async function showContactsList(
       for (const note of notes) {
         const noteDate = new Date(note.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         const preview = note.content.length > 60 ? note.content.substring(0, 57) + '...' : note.content;
-        message += `    📝 <i>${noteDate}: ${preview}</i>\n`;
+        message += `    📝 <i>${noteDate}: ${escapeHtml(preview)}</i>\n`;
       }
     }
 
@@ -3258,7 +3298,7 @@ async function initiateHandshakeFromBot(
     const statusEmoji: Record<string, string> = { pending: '⏳', matched: '🔄', minted: '✅' };
     await sendMessage(
       chatId,
-      `${statusEmoji[existing.status] || '📋'} A handshake with ${contact.first_name} already exists (${existing.status}).`
+      `${statusEmoji[existing.status] || '📋'} A handshake with ${escapeHtml(contact.first_name)} already exists (${existing.status}).`
     );
     return;
   }
@@ -3387,7 +3427,7 @@ async function handleTrust(chatId: number, telegramUserId: number) {
 
   const { data: trust } = await supabase
     .from('trust_scores')
-    .select('*')
+    .select('trust_level, telegram_premium, has_profile_photo, has_username, telegram_account_age_days, wallet_connected, total_handshakes')
     .eq('user_id', userId)
     .single();
 

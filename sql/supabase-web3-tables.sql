@@ -29,7 +29,8 @@ CREATE POLICY "Users can insert own wallets"
 
 CREATE POLICY "Users can update own wallets"
   ON user_wallets FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete own wallets"
   ON user_wallets FOR DELETE
@@ -120,10 +121,18 @@ CREATE POLICY "Users can read own trust score"
   ON trust_scores FOR SELECT
   USING (auth.uid() = user_id);
 
--- Helper: get total points for a user
+-- Helper: get total points for a user (restricted to own user_id)
 CREATE OR REPLACE FUNCTION get_user_total_points(p_user_id UUID)
 RETURNS INTEGER AS $$
-  SELECT COALESCE(SUM(points), 0)::INTEGER
-  FROM user_points
-  WHERE user_id = p_user_id;
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+BEGIN
+  IF auth.uid() IS NOT NULL AND auth.uid() != p_user_id THEN
+    RAISE EXCEPTION 'Access denied: can only query own points';
+  END IF;
+
+  RETURN (
+    SELECT COALESCE(SUM(points), 0)::INTEGER
+    FROM user_points
+    WHERE user_id = p_user_id
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

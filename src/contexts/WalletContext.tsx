@@ -20,7 +20,7 @@ if (typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent)) {
         uri: window.location.origin,
       },
       authorizationCache: createDefaultAuthorizationCache(),
-      chains: ['solana:devnet' as const],
+      chains: [(import.meta.env.VITE_SOLANA_NETWORK === 'mainnet-beta' ? 'solana:mainnet' : 'solana:devnet') as const],
       chainSelector: createDefaultChainSelector(),
       onWalletNotFound: createDefaultWalletNotFoundHandler(),
     });

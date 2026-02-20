@@ -66,7 +66,7 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
 
       if (error) {
         console.error('Error checking user limit:', error);
-        return { allowed: true, currentCount: 0 }; // Fail open
+        return { allowed: false, currentCount: 0 }; // Fail closed for safety
       }
 
       const currentCount = data || 0;
@@ -78,7 +78,7 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
       };
     } catch (error) {
       console.error('Error checking user limit:', error);
-      return { allowed: true, currentCount: 0 }; // Fail open
+      return { allowed: false, currentCount: 0 }; // Fail closed for safety
     }
   },
 

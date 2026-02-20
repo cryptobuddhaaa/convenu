@@ -22,6 +22,14 @@ function vercelApiPlugin(): Plugin {
           const apiPath = req.url.split('?')[0]; // strip query string
           const filePath = path.resolve(process.cwd(), apiPath.slice(1) + '.ts');
 
+          // Guard against path traversal: ensure resolved path stays within api/ directory
+          const apiDir = path.resolve(process.cwd(), 'api');
+          if (!filePath.startsWith(apiDir + path.sep)) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Forbidden' }));
+            return;
+          }
+
           // Use Vite's ssrLoadModule to load the TS file with hot reloading
           const mod = await server.ssrLoadModule(filePath);
           if (!mod.default || typeof mod.default !== 'function') {
