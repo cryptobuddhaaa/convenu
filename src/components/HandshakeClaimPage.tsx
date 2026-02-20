@@ -109,6 +109,11 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
 
         if (!response.ok) {
           const err = await response.json();
+          // If the handshake is already claimed/matched/minted, treat as success
+          if (err.status === 'matched' || err.status === 'minted' || err.status === 'claimed') {
+            setSuccess(true);
+            return;
+          }
           setError(err.error || 'Failed to claim handshake');
           return;
         }
@@ -206,76 +211,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
           <p className="text-slate-400 text-sm mt-1">Confirm your connection</p>
         </div>
 
-        {!user && (
-          <div className="text-center">
-            <p className="text-slate-300 mb-4">Sign in to claim this handshake.</p>
-            <p className="text-slate-400 text-sm">You'll need to be logged in and have a verified wallet.</p>
-          </div>
-        )}
-
-        {user && !connected && (
-          <div className="text-center">
-            <p className="text-slate-300 mb-4">Connect your Solana wallet to proceed.</p>
-            <div className="flex justify-center">
-              <WalletMultiButton />
-            </div>
-          </div>
-        )}
-
-        {user && connected && !wallet && !error && (
-          <div className="text-center">
-            <svg className="w-8 h-8 animate-spin mx-auto text-purple-400" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            <p className="text-slate-400 mt-2">Verifying wallet...</p>
-            <p className="text-slate-500 text-xs mt-1">Please approve the signature request in your wallet.</p>
-          </div>
-        )}
-
-        {loading && user && wallet && (
-          <div className="text-center">
-            <svg className="w-8 h-8 animate-spin mx-auto text-purple-400" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            <p className="text-slate-400 mt-2">Loading handshake...</p>
-          </div>
-        )}
-
-        {error && (
-          <div className="text-center">
-            <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-4 mb-4">
-              <p className="text-red-300">{error}</p>
-            </div>
-            <button
-              onClick={onDone}
-              className="text-blue-400 hover:text-blue-300 text-sm"
-            >
-              Go back to app
-            </button>
-          </div>
-        )}
-
-        {claimData && !success && (
-          <div>
-            <div className="bg-slate-700/50 rounded-lg p-4 mb-4">
-              <p className="text-white font-medium">{claimData.initiatorName}</p>
-              <p className="text-slate-400 text-sm mt-1">
-                Fee: {HANDSHAKE_FEE_SOL} SOL to confirm this handshake
-              </p>
-            </div>
-            <button
-              onClick={handleSign}
-              disabled={signing}
-              className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors"
-            >
-              {signing ? 'Signing transaction...' : `Confirm & Pay ${HANDSHAKE_FEE_SOL} SOL`}
-            </button>
-          </div>
-        )}
-
-        {success && (
+        {success ? (
           <div className="text-center">
             <div className="bg-green-900/30 border border-green-700/50 rounded-lg p-4 mb-4">
               <svg className="w-8 h-8 mx-auto text-green-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -293,7 +229,64 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
               Go to app
             </button>
           </div>
-        )}
+        ) : error ? (
+          <div className="text-center">
+            <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-4 mb-4">
+              <p className="text-red-300">{error}</p>
+            </div>
+            <button
+              onClick={onDone}
+              className="text-blue-400 hover:text-blue-300 text-sm"
+            >
+              Go back to app
+            </button>
+          </div>
+        ) : !user ? (
+          <div className="text-center">
+            <p className="text-slate-300 mb-4">Sign in to claim this handshake.</p>
+            <p className="text-slate-400 text-sm">You'll need to be logged in and have a verified wallet.</p>
+          </div>
+        ) : !connected ? (
+          <div className="text-center">
+            <p className="text-slate-300 mb-4">Connect your Solana wallet to proceed.</p>
+            <div className="flex justify-center">
+              <WalletMultiButton />
+            </div>
+          </div>
+        ) : !wallet ? (
+          <div className="text-center">
+            <svg className="w-8 h-8 animate-spin mx-auto text-purple-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-slate-400 mt-2">Verifying wallet...</p>
+            <p className="text-slate-500 text-xs mt-1">Please approve the signature request in your wallet.</p>
+          </div>
+        ) : loading ? (
+          <div className="text-center">
+            <svg className="w-8 h-8 animate-spin mx-auto text-purple-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-slate-400 mt-2">Loading handshake...</p>
+          </div>
+        ) : claimData ? (
+          <div>
+            <div className="bg-slate-700/50 rounded-lg p-4 mb-4">
+              <p className="text-white font-medium">{claimData.initiatorName}</p>
+              <p className="text-slate-400 text-sm mt-1">
+                Fee: {HANDSHAKE_FEE_SOL} SOL to confirm this handshake
+              </p>
+            </div>
+            <button
+              onClick={handleSign}
+              disabled={signing}
+              className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors"
+            >
+              {signing ? 'Signing transaction...' : `Confirm & Pay ${HANDSHAKE_FEE_SOL} SOL`}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
