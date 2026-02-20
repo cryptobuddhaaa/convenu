@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useContacts } from '../hooks/useContacts';
 import EditContactDialog from './EditContactDialog';
 import { extractLinkedInHandle } from '../lib/validation';
-import type { Contact } from '../models/types';
+import type { Contact, ContactNote } from '../models/types';
+import { supabase } from '../lib/supabase';
 import { toast } from './Toast';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 import { HandshakeButton } from './HandshakeButton';
@@ -35,6 +36,55 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const { confirm, dialogProps } = useConfirmDialog();
 
+  const displayContacts = providedContacts
+    ? providedContacts
+    : itineraryId
+    ? getContactsByItinerary(itineraryId)
+    : contacts;
+
+  // Batch-fetch last 3 timestamped notes for all displayed contacts
+  const [notesByContact, setNotesByContact] = useState<Map<string, ContactNote[]>>(new Map());
+
+  const fetchNotesForContacts = useCallback(async (contactIds: string[]) => {
+    if (contactIds.length === 0) {
+      setNotesByContact(new Map());
+      return;
+    }
+    try {
+      const { data } = await supabase
+        .from('contact_notes')
+        .select('id, contact_id, user_id, content, created_at')
+        .in('contact_id', contactIds)
+        .order('created_at', { ascending: false });
+
+      const grouped = new Map<string, ContactNote[]>();
+      if (data) {
+        for (const row of data) {
+          const cid = row.contact_id as string;
+          const list = grouped.get(cid) || [];
+          if (list.length < 3) {
+            list.push({
+              id: row.id as string,
+              contactId: cid,
+              userId: row.user_id as string,
+              content: row.content as string,
+              createdAt: row.created_at as string,
+            });
+            grouped.set(cid, list);
+          }
+        }
+      }
+      setNotesByContact(grouped);
+    } catch {
+      // Silently fail — notes are supplementary
+    }
+  }, []);
+
+  useEffect(() => {
+    const ids = displayContacts.map((c) => c.id);
+    fetchNotesForContacts(ids);
+  }, [displayContacts, fetchNotesForContacts]);
+
   const handleToggleContacted = async (contact: Contact) => {
     try {
       if (contact.lastContactedAt) {
@@ -48,12 +98,6 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
       toast.error('Failed to update contact.');
     }
   };
-
-  const displayContacts = providedContacts
-    ? providedContacts
-    : itineraryId
-    ? getContactsByItinerary(itineraryId)
-    : contacts;
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -239,6 +283,20 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                 </div>
               )}
 
+              {notesByContact.get(contact.id) && notesByContact.get(contact.id)!.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {notesByContact.get(contact.id)!.map((note) => {
+                    const noteDate = new Date(note.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const preview = note.content.length > 80 ? note.content.substring(0, 77) + '...' : note.content;
+                    return (
+                      <div key={note.id} className="text-xs text-slate-500">
+                        <span className="text-slate-600">{noteDate}:</span> {preview}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {contact.lastContactedAt && (
                 <div className="flex items-center mt-2 text-xs text-green-400">
                   <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -281,7 +339,11 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
       </div>
 
       {editingContact && (
-        <EditContactDialog contact={editingContact} onClose={() => setEditingContact(null)} />
+        <EditContactDialog contact={editingContact} onClose={() => {
+          setEditingContact(null);
+          // Refresh notes in case user added/deleted from the modal
+          fetchNotesForContacts(displayContacts.map((c) => c.id));
+        }} />
       )}
 
       <ConfirmDialog {...dialogProps} />
