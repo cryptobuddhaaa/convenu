@@ -1,10 +1,10 @@
 // /newitinerary flow — itinerary creation
 
-import { supabase, WEBAPP_URL } from '../_lib/config';
-import { sendMessage, answerCallbackQuery } from '../_lib/telegram';
-import { getState, setState, clearState, getLinkedUserId } from '../_lib/state';
-import { escapeHtml, isValidDate } from '../_lib/utils';
-import type { BotState } from '../_lib/types';
+import { supabase, WEBAPP_URL } from '../_lib/config.js';
+import { sendMessage, answerCallbackQuery } from '../_lib/telegram.js';
+import { getState, setState, clearState, getLinkedUserId } from '../_lib/state.js';
+import { escapeHtml, isValidDate } from '../_lib/utils.js';
+import type { BotState } from '../_lib/types.js';
 
 export async function handleNewItinerary(chatId: number, telegramUserId: number) {
   const userId = await getLinkedUserId(telegramUserId);

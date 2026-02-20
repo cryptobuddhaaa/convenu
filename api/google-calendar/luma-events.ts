@@ -12,7 +12,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth } from '../_lib/auth';
+import { requireAuth } from '../_lib/auth.js';
 
 interface GoogleCalendarItem {
   id: string;

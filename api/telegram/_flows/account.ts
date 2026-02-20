@@ -1,8 +1,8 @@
 // /start command handler — account linking & welcome
 
-import { supabase, WEBAPP_URL } from '../_lib/config';
-import { sendMessage } from '../_lib/telegram';
-import { getLinkedUserId } from '../_lib/state';
+import { supabase, WEBAPP_URL } from '../_lib/config.js';
+import { sendMessage } from '../_lib/telegram.js';
+import { getLinkedUserId } from '../_lib/state.js';
 
 export async function handleStart(
   chatId: number,

@@ -7,12 +7,12 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
-import { WEBHOOK_SECRET, WEBAPP_URL } from './_lib/config';
-import { sendMessage } from './_lib/telegram';
-import { getState, clearState, getLinkedUserId } from './_lib/state';
+import { WEBHOOK_SECRET, WEBAPP_URL } from './_lib/config.js';
+import { sendMessage } from './_lib/telegram.js';
+import { getState, clearState, getLinkedUserId } from './_lib/state.js';
 
 // --- Flows ---
-import { handleStart } from './_flows/account';
+import { handleStart } from './_flows/account.js';
 import {
   handleNewContact,
   handleItinerarySelection,
@@ -22,13 +22,13 @@ import {
   handleContactEdit,
   handleTagSelection,
   handleContactConfirmation,
-} from './_flows/contact';
+} from './_flows/contact.js';
 import {
   handleNewItinerary,
   handleItineraryTextInput,
   handleItineraryConfirmation,
   handleItineraryEdit,
-} from './_flows/itinerary';
+} from './_flows/itinerary.js';
 import {
   handleNewEvent,
   handleNewEventItSelection,
@@ -38,12 +38,12 @@ import {
   handleEventTextInput,
   handleEventConfirmation,
   handleEventEdit,
-} from './_flows/event';
+} from './_flows/event.js';
 import {
   handleForwardedMessage,
   handleForwardEventChoice,
   handleForwardNoteChoice,
-} from './_flows/forward';
+} from './_flows/forward.js';
 import {
   handleItineraries,
   handleItineraryView,
@@ -52,16 +52,16 @@ import {
   handleContactsListSelection,
   handleContactsEventSelection,
   handleContacted,
-} from './_flows/contacts-view';
+} from './_flows/contacts-view.js';
 import {
   handleHandshake,
   handleHandshakeSelection,
-} from './_flows/handshake';
+} from './_flows/handshake.js';
 import {
   handlePoints,
   handleTrust,
   handleMyHandshakes,
-} from './_flows/trust-points';
+} from './_flows/trust-points.js';
 
 // --- Text input router ---
 

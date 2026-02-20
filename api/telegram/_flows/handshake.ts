@@ -1,9 +1,9 @@
 // /handshake flow — Proof of Handshake initiation from Telegram
 
-import { supabase, WEBAPP_URL } from '../_lib/config';
-import { sendMessage, answerCallbackQuery } from '../_lib/telegram';
-import { getLinkedUserId } from '../_lib/state';
-import { escapeHtml } from '../_lib/utils';
+import { supabase, WEBAPP_URL } from '../_lib/config.js';
+import { sendMessage, answerCallbackQuery } from '../_lib/telegram.js';
+import { getLinkedUserId } from '../_lib/state.js';
+import { escapeHtml } from '../_lib/utils.js';
 
 export async function handleHandshake(chatId: number, telegramUserId: number, args: string) {
   const userId = await getLinkedUserId(telegramUserId);

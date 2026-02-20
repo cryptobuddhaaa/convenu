@@ -1,9 +1,9 @@
 // /points, /trust, /shakehistory — trust & points commands
 
-import { supabase } from '../_lib/config';
-import { sendMessage } from '../_lib/telegram';
-import { getLinkedUserId } from '../_lib/state';
-import { escapeHtml } from '../_lib/utils';
+import { supabase } from '../_lib/config.js';
+import { sendMessage } from '../_lib/telegram.js';
+import { getLinkedUserId } from '../_lib/state.js';
+import { escapeHtml } from '../_lib/utils.js';
 
 export async function handlePoints(chatId: number, telegramUserId: number) {
   const userId = await getLinkedUserId(telegramUserId);

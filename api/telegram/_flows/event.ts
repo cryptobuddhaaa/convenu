@@ -1,12 +1,12 @@
 // /newevent flow — event creation with Luma import support
 
 import crypto from 'crypto';
-import { supabase, WEBAPP_URL } from '../_lib/config';
-import { sendMessage, answerCallbackQuery } from '../_lib/telegram';
-import { getState, setState, clearState, getLinkedUserId } from '../_lib/state';
-import { escapeHtml, isValidTime, padTime, getEventTypeLabel, EVENT_TYPE_OPTIONS, EVENT_TYPE_KEYBOARD } from '../_lib/utils';
-import { extractLumaUrls, fetchLumaEvent } from '../_lib/luma';
-import type { BotState } from '../_lib/types';
+import { supabase, WEBAPP_URL } from '../_lib/config.js';
+import { sendMessage, answerCallbackQuery } from '../_lib/telegram.js';
+import { getState, setState, clearState, getLinkedUserId } from '../_lib/state.js';
+import { escapeHtml, isValidTime, padTime, getEventTypeLabel, EVENT_TYPE_OPTIONS, EVENT_TYPE_KEYBOARD } from '../_lib/utils.js';
+import { extractLumaUrls, fetchLumaEvent } from '../_lib/luma.js';
+import type { BotState } from '../_lib/types.js';
 
 export async function handleNewEvent(chatId: number, telegramUserId: number) {
   const userId = await getLinkedUserId(telegramUserId);

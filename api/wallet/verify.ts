@@ -8,7 +8,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
-import { requireAuth } from '../_lib/auth';
+import { requireAuth } from '../_lib/auth.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',

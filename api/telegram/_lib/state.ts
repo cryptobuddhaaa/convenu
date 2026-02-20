@@ -1,7 +1,7 @@
 // Bot state management & account linking
 
-import { supabase } from './config';
-import type { BotState } from './types';
+import { supabase } from './config.js';
+import type { BotState } from './types.js';
 
 export async function getState(telegramUserId: number): Promise<BotState> {
   const { data } = await supabase
