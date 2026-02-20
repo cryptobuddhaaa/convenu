@@ -258,6 +258,9 @@ export function WalletButton() {
             borderRadius: '6px',
             backgroundColor: 'rgb(71, 85, 105)',
             lineHeight: '34px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
