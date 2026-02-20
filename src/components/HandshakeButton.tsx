@@ -76,12 +76,11 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
       setLoading(true);
       try {
         toast.info('Minting NFTs...');
-        const minted = await mint(existingHandshake.id);
-        if (minted) {
-          toast.success('Proof of Handshake NFTs minted!');
-        } else {
-          toast.error('Minting failed. Please try again.');
-        }
+        await mint(existingHandshake.id);
+        toast.success('Proof of Handshake NFTs minted!');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        toast.error(`Minting failed: ${msg}`);
       } finally {
         setLoading(false);
       }

@@ -725,8 +725,9 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
       pointsAwarded: POINTS_PER_HANDSHAKE,
     });
   } catch (error) {
-    console.error('Mint error:', error);
-    return res.status(500).json({ error: 'Failed to mint handshake NFTs' });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Mint error:', message, error);
+    return res.status(500).json({ error: `Failed to mint handshake NFTs: ${message}` });
   }
 }
 

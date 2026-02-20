@@ -96,8 +96,9 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
         console.warn('Failed to fetch pending handshakes for receiver');
       }
 
-      // Merge and deduplicate by ID
-      const allRows = [...(ownData || []), ...pendingForMe];
+      // Merge and deduplicate by ID. Enriched data from the pending endpoint
+      // (has initiator_name/email) takes priority over the direct query.
+      const allRows = [...pendingForMe, ...(ownData || [])];
       const seen = new Set<string>();
       const unique = allRows.filter((row) => {
         const id = row.id as string;
@@ -188,8 +189,9 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
 
       return true;
     } catch (error) {
-      console.error('Failed to mint:', error);
-      return false;
+      const msg = error instanceof Error ? error.message : 'Failed to mint';
+      console.error('Failed to mint:', msg);
+      throw error;
     }
   },
 
