@@ -3,6 +3,7 @@ import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { WalletError, WalletConnectionError } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
+import { SolflareInAppAdapter } from '../lib/SolflareInAppAdapter';
 import { clusterApiUrl } from '@solana/web3.js';
 
 // Register Mobile Wallet Adapter for Android MWA support (only on Android devices)
@@ -43,16 +44,13 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
   // PhantomWalletAdapter: fallback for Phantom's iOS in-app browser where
   // Wallet Standard auto-detection has a timing race. Deduplicates automatically.
   //
-  // Solflare: NO legacy adapter — rely entirely on Wallet Standard.
-  // SolflareWalletAdapter imports @solflare-wallet/sdk whose connect() injects a
-  // fullscreen iframe (z-index 99999, position: fixed, 100% w/h) from connect.solflare.com.
-  // Inside Solflare's own in-app browser this iframe never resolves and blocks ALL touch
-  // events. Detecting the in-app browser via window.solflare is a timing race on iOS.
-  // Wallet Standard handles Solflare everywhere it matters:
-  //   - Solflare in-app browser: native window.solflare → Wallet Standard auto-registers
-  //   - Desktop extension: Wallet Standard auto-registers
+  // SolflareInAppAdapter: lightweight adapter that wraps window.solflare directly.
+  // The official SolflareWalletAdapter imports @solflare-wallet/sdk whose connect()
+  // injects a fullscreen iframe that freezes Solflare's own in-app browser on iOS.
+  // This adapter uses the native provider without any SDK import — no iframe, ever.
+  // It only reports as Installed when window.solflare.isSolflare is detected.
   const wallets = useMemo(
-    () => [new PhantomWalletAdapter()],
+    () => [new PhantomWalletAdapter(), new SolflareInAppAdapter()],
     [],
   );
 
