@@ -5,7 +5,7 @@
 
 import { supabase } from '../lib/supabase';
 
-const BOT_USERNAME = 'itinerarycontactbot';
+const BOT_USERNAME = 'convenubot';
 
 /**
  * Generate a one-time linking code and return the Telegram deep link.
