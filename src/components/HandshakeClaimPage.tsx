@@ -317,7 +317,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
                     const ok = await confirm({
                       title: 'Connect wallet',
                       message:
-                        'To claim this handshake, you need to open this link in your wallet browser (Phantom or Solflare).\n\n' +
+                        'To claim this handshake, you need to open this link in your wallet browser (Phantom).\n\n' +
                         'Tap OK to copy the link, then paste it into your wallet browser.',
                       confirmLabel: 'OK',
                     });

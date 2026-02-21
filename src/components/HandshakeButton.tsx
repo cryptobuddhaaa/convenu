@@ -139,7 +139,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
       const ok = await confirm({
         title: 'Connect wallet',
         message:
-          'To send a handshake, you need to open this app in your wallet browser (Phantom or Solflare).\n\n' +
+          'To send a handshake, you need to open this app in your wallet browser (Phantom).\n\n' +
           'Tap OK to copy a one-time login link, then paste it into your wallet browser.',
         confirmLabel: 'OK',
       });

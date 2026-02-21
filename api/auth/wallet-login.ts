@@ -2,7 +2,7 @@
  * POST /api/auth/wallet-login
  *
  * Generates a one-time magic link URL so Telegram-authenticated users
- * can open the app in a wallet browser (Phantom/Solflare) and stay
+ * can open the app in a wallet browser (Phantom) and stay
  * signed in without Telegram initData.
  *
  * Requires: valid Supabase session (Authorization header).
