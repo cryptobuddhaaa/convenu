@@ -99,14 +99,24 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
 
     this._connecting = true;
     try {
-      await provider.connect();
+      // In Solflare's in-app browser, the provider may already be connected.
+      // Calling connect() on an already-connected provider can silently fail or hang.
+      if (!provider.isConnected) {
+        await provider.connect();
+      }
+
       this._provider = provider;
 
       provider.on('disconnect', this._onDisconnect);
       provider.on('accountChanged', this._onAccountChanged);
 
-      this.emit('connect', provider.publicKey!);
+      if (!provider.publicKey) {
+        throw new Error('No public key available after connect');
+      }
+
+      this.emit('connect', provider.publicKey);
     } catch (error: unknown) {
+      this._provider = null;
       throw new WalletConnectionError((error as Error)?.message, error);
     } finally {
       this._connecting = false;
