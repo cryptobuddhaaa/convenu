@@ -17,7 +17,7 @@ if (typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent)) {
   try {
     registerMwa({
       appIdentity: {
-        name: 'Shareable Itinerary',
+        name: 'Convenu',
         uri: window.location.origin,
       },
       authorizationCache: createDefaultAuthorizationCache(),

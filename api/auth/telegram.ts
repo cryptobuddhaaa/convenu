@@ -17,7 +17,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 /** Synthetic email domain for Telegram-only users */
-const TG_EMAIL_DOMAIN = 'tg.shareable-itinerary.app';
+const TG_EMAIL_DOMAIN = 'tg.convenu.app';
 
 /**
  * Verify Telegram Mini App initData using HMAC-SHA-256.
@@ -85,7 +85,7 @@ interface TelegramWebAppUser {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers for Mini App context — restrict to our own origin
-  const allowedOrigin = process.env.WEBAPP_URL || 'https://shareable-itinerary.vercel.app';
+  const allowedOrigin = process.env.WEBAPP_URL || 'https://convenu.vercel.app';
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');

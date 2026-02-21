@@ -26,7 +26,7 @@ export async function fetchLumaEvent(lumaUrl: string): Promise<LumaEventData | n
     // which requires auth that the webhook handler doesn't have
     const response = await fetch(lumaUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ShareableItinerary/1.0)',
+        'User-Agent': 'Mozilla/5.0 (compatible; Convenu/1.0)',
         'Accept': 'text/html',
       },
     });

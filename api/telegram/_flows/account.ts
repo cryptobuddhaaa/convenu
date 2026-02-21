@@ -41,7 +41,7 @@ export async function handleStart(
     } else {
       await sendMessage(
         chatId,
-        '👋 <b>Welcome to Shareable Itinerary!</b>\n\n' +
+        '👋 <b>Welcome to Convenu!</b>\n\n' +
           'Your all-in-one trip planner and networking companion.\n\n' +
           '✈️ Create and manage trip itineraries\n' +
           '📅 Import events from Luma links\n' +

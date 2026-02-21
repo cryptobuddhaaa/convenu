@@ -76,7 +76,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
         }
 
         // Match the exact format the verify API expects
-        const message = `Verify wallet ownership for Shareable Itinerary\n\nUser: ${user.id}\nTimestamp: ${Date.now()}`;
+        const message = `Verify wallet ownership for Convenu\n\nUser: ${user.id}\nTimestamp: ${Date.now()}`;
         const encodedMessage = new TextEncoder().encode(message);
         const signatureBytes = await signMessage(encodedMessage);
         const signatureBase58 = bs58.encode(signatureBytes);

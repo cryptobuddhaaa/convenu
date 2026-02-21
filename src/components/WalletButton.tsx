@@ -99,7 +99,7 @@ export function WalletButton() {
 
       // --- Signature verification ---
       setVerifying(true);
-      const message = `Verify wallet ownership for Shareable Itinerary\n\nUser: ${user.id}\nTimestamp: ${Date.now()}`;
+      const message = `Verify wallet ownership for Convenu\n\nUser: ${user.id}\nTimestamp: ${Date.now()}`;
       const encoded = new TextEncoder().encode(message);
 
       // Guard again — adapter may have disconnected while dialog was open
