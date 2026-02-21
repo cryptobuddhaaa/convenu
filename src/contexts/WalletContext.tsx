@@ -3,7 +3,6 @@ import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { WalletError, WalletConnectionError } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
-import { SolflareInAppAdapter } from '../lib/SolflareInAppAdapter';
 import { clusterApiUrl } from '@solana/web3.js';
 
 // Register Mobile Wallet Adapter for Android MWA support (only on Android devices)
@@ -44,25 +43,19 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
   // PhantomWalletAdapter: fallback for Phantom's iOS in-app browser where
   // Wallet Standard auto-detection has a timing race. Deduplicates automatically.
   //
-  // SolflareInAppAdapter: lightweight adapter that wraps window.solflare directly.
-  // The official SolflareWalletAdapter imports @solflare-wallet/sdk whose connect()
-  // injects a fullscreen iframe that freezes Solflare's own in-app browser on iOS.
-  // This adapter uses the native provider without any SDK import — no iframe, ever.
-  // It only reports as Installed when window.solflare.isSolflare is detected.
+  // Solflare: Do NOT add SolflareWalletAdapter here — it imports @solflare-wallet/sdk
+  // whose connect() injects a fullscreen iframe that freezes iOS in-app browsers.
+  // Solflare's in-app browser registers via Wallet Standard (solflareWalletStandardInitialized),
+  // which @solana/wallet-adapter-react auto-detects. No manual adapter needed.
   const wallets = useMemo(
-    () => [new PhantomWalletAdapter(), new SolflareInAppAdapter()],
+    () => [new PhantomWalletAdapter()],
     [],
   );
 
   const onError = useCallback((error: WalletError) => {
+    // Silently ignore autoConnect / silent-connect failures — the wallet adapter
+    // retries on the next user-initiated connect anyway.
     if (error instanceof WalletConnectionError) {
-      // Show Solflare-specific connection errors (e.g., timeout) so user isn't stuck
-      // on a silent "Connecting..." state. Other connection errors (autoConnect) stay silent.
-      if (error.message?.includes('Solflare') || error.message?.includes('timed out')) {
-        console.error('[Wallet] Solflare connection error:', error.message);
-        alert(`Wallet connection failed: ${error.message}`);
-        return;
-      }
       console.warn('[Wallet] Connection attempt failed:', error.message);
       return;
     }
