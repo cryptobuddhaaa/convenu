@@ -41,11 +41,23 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
   const network = (import.meta.env.VITE_SOLANA_NETWORK as 'devnet' | 'mainnet-beta') || 'devnet';
   const endpoint = import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl(network);
 
-  // Include PhantomWalletAdapter as fallback for environments where Wallet Standard
-  // auto-detection fails (e.g. Phantom's iOS in-app browser has a timing race).
-  // If Phantom also registers via Wallet Standard, the adapter deduplicates automatically.
-  // MWA registered via registerMwa() on Android.
-  const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
+  // PhantomWalletAdapter: fallback for Phantom's iOS in-app browser where
+  // Wallet Standard auto-detection has a timing race. Deduplicates automatically.
+  //
+  // SolflareWalletAdapter: EXCLUDED inside Solflare's own in-app browser because
+  // its connect() imports @solflare-wallet/sdk which injects a fullscreen iframe
+  // (z-index 99999, position: fixed, 100% width/height) from connect.solflare.com.
+  // Inside Solflare's browser this iframe never resolves and blocks all touch events.
+  // Solflare's browser injects window.solflare natively, which Wallet Standard detects.
+  const isSolflareInApp = typeof window !== 'undefined' &&
+    !!(window as unknown as Record<string, unknown>).solflare;
+  const wallets = useMemo(
+    () => isSolflareInApp
+      ? [new PhantomWalletAdapter()]
+      : [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const onError = useCallback((error: WalletError) => {
     // Silently ignore autoConnect / silent-connect failures — the wallet adapter
