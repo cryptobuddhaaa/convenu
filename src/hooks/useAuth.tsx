@@ -80,8 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const urlParams = new URLSearchParams(window.location.search);
       const walletLoginToken = urlParams.get('wallet_login');
       if (walletLoginToken) {
-        // Clean the URL immediately
-        window.history.replaceState({}, '', window.location.pathname);
+        // Clean wallet_login from URL but preserve other params (e.g. ?claim=)
+        const cleanParams = new URLSearchParams(urlParams);
+        cleanParams.delete('wallet_login');
+        const cleanSearch = cleanParams.toString();
+        window.history.replaceState({}, '', window.location.pathname + (cleanSearch ? `?${cleanSearch}` : ''));
         try {
           const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
             token_hash: walletLoginToken,

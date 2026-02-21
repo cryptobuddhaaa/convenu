@@ -14,6 +14,7 @@ import { useUserWallet } from '../hooks/useUserWallet';
 import { authFetch } from '../lib/authFetch';
 import { HANDSHAKE_FEE_SOL, POINTS_PER_HANDSHAKE } from '../lib/constants';
 import { toast } from './Toast';
+import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 
 interface ClaimData {
   handshakeId: string;
@@ -38,8 +39,14 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const verifyAttempted = useRef(false);
+  const { confirm, dialogProps } = useConfirmDialog();
+  const [tgGenerating, setTgGenerating] = useState(false);
+  const [tgLoginUrl, setTgLoginUrl] = useState<string | null>(null);
 
   const wallet = getPrimaryWallet();
+
+  const isTelegramWebApp = typeof window !== 'undefined' &&
+    (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
 
   // Auto-link and verify wallet when connected but not yet verified
   useEffect(() => {
@@ -245,6 +252,93 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
           <div className="text-center">
             <p className="text-slate-300 mb-4">Sign in to claim this handshake.</p>
             <p className="text-slate-400 text-sm">You'll need to be logged in and have a verified wallet.</p>
+          </div>
+        ) : !connected && isTelegramWebApp ? (
+          <div className="text-center">
+            <p className="text-slate-300 mb-4">You need to connect a wallet to claim this handshake.</p>
+            {tgLoginUrl ? (
+              <div className="flex flex-col gap-2 mx-auto max-w-sm">
+                <p className="text-xs text-slate-400">Long-press to select, then copy and paste in your wallet browser:</p>
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    readOnly
+                    value={tgLoginUrl}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-xs text-white font-mono break-all select-all"
+                    style={{ userSelect: 'all', WebkitUserSelect: 'all' } as React.CSSProperties}
+                  />
+                  <button
+                    onClick={() => setTgLoginUrl(null)}
+                    className="px-2 py-1.5 text-xs text-slate-400 hover:text-white"
+                    aria-label="Close"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={async () => {
+                  if (tgGenerating) return;
+                  setTgGenerating(true);
+                  try {
+                    const response = await authFetch('/api/auth/wallet-login', { method: 'POST' });
+                    if (!response.ok) throw new Error('Failed to generate login link');
+                    const { url: baseUrl } = await response.json();
+                    // Append claim param so the wallet browser lands on the claim page
+                    const claimUrl = `${baseUrl}&claim=${handshakeId}`;
+
+                    const ok = await confirm({
+                      title: 'Connect wallet',
+                      message:
+                        'To claim this handshake, you need to open this link in your wallet browser (Phantom or Solflare).\n\n' +
+                        'Tap OK to copy the link, then paste it into your wallet browser.',
+                      confirmLabel: 'OK',
+                    });
+                    if (!ok) return;
+
+                    // Try clipboard
+                    let didCopy = false;
+                    try {
+                      await navigator.clipboard.writeText(claimUrl);
+                      didCopy = true;
+                    } catch { /* not available */ }
+                    if (!didCopy) {
+                      try {
+                        const textarea = document.createElement('textarea');
+                        textarea.value = claimUrl;
+                        textarea.style.position = 'fixed';
+                        textarea.style.left = '-9999px';
+                        textarea.style.top = '-9999px';
+                        document.body.appendChild(textarea);
+                        textarea.focus();
+                        textarea.select();
+                        didCopy = document.execCommand('copy');
+                        document.body.removeChild(textarea);
+                      } catch { /* fallback failed */ }
+                    }
+
+                    if (didCopy) {
+                      toast.success('Link copied! Paste it in your wallet browser.');
+                    } else {
+                      setTgLoginUrl(claimUrl);
+                    }
+                  } catch {
+                    toast.error('Failed to generate login link. Please try again.');
+                  } finally {
+                    setTgGenerating(false);
+                  }
+                }}
+                disabled={tgGenerating}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors"
+              >
+                {tgGenerating ? 'Generating...' : 'Connect wallet'}
+              </button>
+            )}
+            <ConfirmDialog {...dialogProps} />
           </div>
         ) : !connected ? (
           <div className="text-center">
