@@ -4,12 +4,7 @@ import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { WalletError, WalletConnectionError } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
 import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
-import { initialize as initializeSolflare } from '@solflare-wallet/wallet-adapter';
 import { clusterApiUrl } from '@solana/web3.js';
-
-// Register Solflare via Wallet Standard — ensures detection in Solflare's
-// in-app browser where window.solflare polling may fail due to injection timing.
-initializeSolflare();
 
 // Register Mobile Wallet Adapter for Android MWA support (only on Android devices)
 import {
