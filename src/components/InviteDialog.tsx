@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useContacts } from '../hooks/useContacts';
 import { useItinerary } from '../hooks/useItinerary';
 import { toast } from './Toast';
+import { isTelegramWebApp, openTelegramLink } from '../lib/telegram';
 import type { Contact } from '../models/types';
 
 interface InviteDialogProps {
@@ -81,12 +82,17 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
       await navigator.clipboard.writeText(currentMessage);
       toast.info('Message copied to clipboard');
     } catch {
-      toast.error('Failed to copy. Please copy manually.');
+      toast.error('Failed to copy. Please copy the message manually.');
     }
 
     const handle = currentContact.telegramHandle?.replace('@', '');
     if (handle) {
-      window.open(`https://t.me/${handle}`, '_blank');
+      const dmUrl = `https://t.me/${handle}`;
+      if (isTelegramWebApp()) {
+        openTelegramLink(dmUrl);
+      } else {
+        window.open(dmUrl, '_blank');
+      }
     }
   };
 

@@ -15,6 +15,7 @@ import { authFetch } from '../lib/authFetch';
 import { HANDSHAKE_FEE_SOL, POINTS_PER_HANDSHAKE } from '../lib/constants';
 import { toast } from './Toast';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
+import { isTelegramWebApp as checkTelegramWebApp } from '../lib/telegram';
 
 interface ClaimData {
   handshakeId: string;
@@ -46,8 +47,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
 
   const wallet = getPrimaryWallet();
 
-  const isTelegramWebApp = typeof window !== 'undefined' &&
-    (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
+  const isTelegramWebApp = checkTelegramWebApp();
 
   // Auto-link and verify wallet when connected but not yet verified
   useEffect(() => {

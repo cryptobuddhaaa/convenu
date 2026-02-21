@@ -10,6 +10,7 @@ import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
 import { mapsService } from '../services/mapsService';
 import { printItinerary } from '../services/printService';
 import { toast } from './Toast';
+import { isTelegramWebApp } from '../lib/telegram';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 
 interface ItineraryTimelineProps {
@@ -206,7 +207,13 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
               />
             )}
             <button
-              onClick={() => printItinerary(itinerary)}
+              onClick={() => {
+                if (isTelegramWebApp()) {
+                  toast.info('Export is available in the browser version of the app.');
+                  return;
+                }
+                printItinerary(itinerary);
+              }}
               className="inline-flex items-center px-3 py-1.5 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-700 hover:bg-slate-600"
               title="Export as PDF"
               aria-label="Export as PDF"

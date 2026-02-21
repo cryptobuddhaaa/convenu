@@ -12,6 +12,7 @@ import { useUserWallet } from '../hooks/useUserWallet';
 import { HANDSHAKE_FEE_SOL, POINTS_PER_HANDSHAKE } from '../lib/constants';
 import { toast } from './Toast';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
+import { isTelegramWebApp as checkTelegramWebApp } from '../lib/telegram';
 import { authFetch } from '../lib/authFetch';
 import type { Contact, Handshake } from '../models/types';
 
@@ -28,8 +29,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
   const [tgGenerating, setTgGenerating] = useState(false);
   const { confirm, dialogProps } = useConfirmDialog();
 
-  const isTelegramWebApp = typeof window !== 'undefined' &&
-    (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
+  const isTelegramWebApp = checkTelegramWebApp();
 
   const contactFullName = `${contact.firstName} ${contact.lastName}`;
   const existingHandshake = getByContactId(contact.id)

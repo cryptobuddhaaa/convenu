@@ -4,8 +4,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Calendar, Download, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Calendar, Download, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react';
 import { googleCalendarService, type GoogleCalendarEvent } from '../services/googleCalendarService';
+import { isTelegramWebApp } from '../lib/telegram';
 import type { Itinerary, ItineraryEvent } from '../models/types';
 
 interface GoogleCalendarImportProps {
@@ -151,7 +152,12 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
 
   return (
     <div className="space-y-4">
-      {!isConnected ? (
+      {isTelegramWebApp() ? (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-400">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>Google Calendar import is available in the browser version</span>
+        </div>
+      ) : !isConnected ? (
         <button
           onClick={handleConnect}
           className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors shadow-sm"

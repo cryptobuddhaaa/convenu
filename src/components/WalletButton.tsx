@@ -13,6 +13,7 @@ import { useUserWallet } from '../hooks/useUserWallet';
 import { useAuth } from '../hooks/useAuth';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 import { toast } from './Toast';
+import { isTelegramWebApp as checkTelegramWebApp } from '../lib/telegram';
 import { authFetch } from '../lib/authFetch';
 import bs58 from 'bs58';
 
@@ -227,8 +228,7 @@ export function WalletButton() {
 
   // Detect Telegram WebApp — wallets can't connect in Telegram's webview.
   // Guide users to open the app URL in their wallet's in-app browser.
-  const isTelegramWebApp = typeof window !== 'undefined' &&
-    (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
+  const isTelegramWebApp = checkTelegramWebApp();
   if (isTelegramWebApp && !connected) {
 
     // Copy text to clipboard with fallbacks for iOS Telegram webview
