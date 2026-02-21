@@ -1,9 +1,10 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { WalletError, WalletConnectionError } from '@solana/wallet-adapter-base';
+import { WalletError, WalletConnectionError, isWalletAdapterCompatibleStandardWallet } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
 import { clusterApiUrl } from '@solana/web3.js';
+import { getWallets } from '@wallet-standard/app';
 
 // Register Mobile Wallet Adapter for Android MWA support (only on Android devices)
 import {
@@ -51,6 +52,41 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
     () => [new PhantomWalletAdapter()],
     [],
   );
+
+  // ── DEBUG: Wallet Standard registry probe ──
+  useEffect(() => {
+    const { get, on } = getWallets();
+    function dumpWallets(label: string) {
+      const all = get();
+      const el = document.getElementById('__sfdbg') || (() => {
+        const d = document.createElement('div');
+        d.id = '__sfdbg';
+        d.style.cssText =
+          'position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow-y:auto;' +
+          'background:rgba(0,0,0,0.9);color:#0f0;font:11px/1.4 monospace;padding:8px;z-index:999999;' +
+          'pointer-events:auto;white-space:pre-wrap;';
+        document.body.appendChild(d);
+        return d;
+      })();
+      const ts = new Date().toISOString().slice(11, 23);
+      el.textContent += `\n${ts} [WalletStd] ${label}\n`;
+      el.textContent += `  Registered wallets: ${all.length}\n`;
+      all.forEach((w, i) => {
+        const features = Object.keys(w.features).join(', ');
+        const compatible = isWalletAdapterCompatibleStandardWallet(w);
+        el.textContent += `  [${i}] "${w.name}" compatible=${compatible}\n`;
+        el.textContent += `    features: ${features}\n`;
+        el.textContent += `    chains: ${w.chains?.join(', ') ?? 'none'}\n`;
+      });
+      el.scrollTop = el.scrollHeight;
+    }
+    dumpWallets('initial');
+    const off = on('register', (...wallets) => {
+      dumpWallets(`register event (+${wallets.length}: ${wallets.map(w => w.name).join(', ')})`);
+    });
+    return off;
+  }, []);
+  // ── END DEBUG ──
 
   const onError = useCallback((error: WalletError) => {
     // Silently ignore autoConnect / silent-connect failures — the wallet adapter
