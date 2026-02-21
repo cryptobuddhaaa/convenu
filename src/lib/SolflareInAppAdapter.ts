@@ -17,7 +17,6 @@ import {
   WalletConnectionError,
   WalletDisconnectionError,
   WalletNotConnectedError,
-  WalletNotReadyError,
   WalletReadyState,
   WalletSignMessageError,
   WalletSignTransactionError,
@@ -27,7 +26,7 @@ import type { WalletName } from '@solana/wallet-adapter-base';
 import type { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
 
 interface SolflareProvider {
-  isSolflare: boolean;
+  isSolflare?: boolean;
   isConnected: boolean;
   publicKey: PublicKey | null;
   connect(): Promise<void>;
@@ -47,9 +46,26 @@ const ICON =
 
 function getProvider(): SolflareProvider | null {
   if (typeof window === 'undefined') return null;
-  const provider = (window as unknown as Record<string, unknown>).solflare as SolflareProvider | undefined;
-  if (provider?.isSolflare) return provider;
+  const w = window as unknown as Record<string, unknown>;
+
+  // Standard: window.solflare with isSolflare flag
+  const solflare = w.solflare as SolflareProvider | undefined;
+  if (solflare?.isSolflare) return solflare;
+
+  // Alternative: window.SolflareApp (some iOS versions)
+  const app = w.SolflareApp as SolflareProvider | undefined;
+  if (app && typeof app.connect === 'function') return app;
+
+  // Fallback: window.solflare exists with a connect method but no isSolflare flag
+  if (solflare && typeof solflare.connect === 'function') return solflare;
+
   return null;
+}
+
+function isProviderDetectable(): boolean {
+  if (typeof window === 'undefined') return false;
+  const w = window as unknown as Record<string, unknown>;
+  return !!(w.solflare || w.SolflareApp);
 }
 
 export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
@@ -68,15 +84,20 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
   constructor() {
     super();
     if (this._readyState !== WalletReadyState.Unsupported) {
-      scopePollingDetectionStrategy(() => {
-        const provider = getProvider();
-        if (provider) {
-          this._readyState = WalletReadyState.Installed;
-          this.emit('readyStateChange', this._readyState);
-          return true;
-        }
-        return false;
-      });
+      // Check immediately — provider may already be available
+      if (getProvider()) {
+        this._readyState = WalletReadyState.Installed;
+      } else {
+        scopePollingDetectionStrategy(() => {
+          const provider = getProvider();
+          if (provider) {
+            this._readyState = WalletReadyState.Installed;
+            this.emit('readyStateChange', this._readyState);
+            return true;
+          }
+          return false;
+        });
+      }
     }
   }
 
@@ -96,8 +117,25 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
   async connect(): Promise<void> {
     if (this.connected || this._connecting) return;
 
-    const provider = getProvider();
-    if (!provider) throw new WalletNotReadyError();
+    // Provider might be injected asynchronously — retry up to 2s
+    let provider = getProvider();
+    if (!provider) {
+      for (let i = 0; i < 8; i++) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        provider = getProvider();
+        if (provider) break;
+      }
+    }
+
+    // Throw WalletConnectionError (NOT WalletNotReadyError) to prevent the
+    // wallet adapter framework from silently redirecting to solflare.com
+    if (!provider) {
+      throw new WalletConnectionError(
+        isProviderDetectable()
+          ? 'Solflare provider found but not fully initialized'
+          : 'Solflare provider not found. Are you in Solflare\'s browser?'
+      );
+    }
 
     this._connecting = true;
     try {
