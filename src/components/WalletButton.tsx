@@ -361,19 +361,17 @@ export function WalletButton() {
     );
   }
 
-  // Verified wallet but adapter disconnected — show reconnect button
+  // Verified wallet but adapter disconnected — show connect button with address hint
   if (primaryWallet && !connected) {
     const shortAddress = `${primaryWallet.walletAddress.slice(0, 4)}...${primaryWallet.walletAddress.slice(-4)}`;
     return (
       <>
-        <WalletMultiButton
-          style={{ backgroundColor: 'rgb(71, 85, 105)' }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#64748b', display: 'inline-block', flexShrink: 0 }} />
-            {shortAddress} — Reconnect
-          </span>
-        </WalletMultiButton>
+        <div className="flex items-center gap-2">
+          <WalletMultiButton
+            style={{ backgroundColor: 'rgb(126, 34, 206)' }}
+          />
+          <span className="text-xs text-slate-500 font-mono hidden sm:inline">{shortAddress}</span>
+        </div>
         <ConfirmDialog {...dialogProps} />
       </>
     );
