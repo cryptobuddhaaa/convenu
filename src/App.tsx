@@ -25,7 +25,7 @@ function App() {
   const { currentItinerary, itineraries, initialize, initialized, reset } = useItinerary();
   const { initialize: initializeContacts, initialized: contactsInitialized, reset: resetContacts } = useContacts();
   const { initialize: initializeWallets, initialized: walletsInitialized, reset: resetWallets } = useUserWallet();
-  const { initialize: initializeHandshakes, initialized: handshakesInitialized, reset: resetHandshakes } = useHandshakes();
+  const { initialize: initializeHandshakes, initialized: handshakesInitialized, handshakes, reset: resetHandshakes } = useHandshakes();
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('itinerary');
@@ -37,6 +37,11 @@ function App() {
   const { confirm, dialogProps } = useConfirmDialog();
 
   const itinerary = currentItinerary();
+
+  // Badge counts: pending handshakes where the current user is the receiver
+  const pendingForMe = handshakes.filter(
+    (h) => (h.status === 'pending' || h.status === 'claimed') && h.initiatorUserId !== user?.id
+  ).length;
 
   // Load viewed shared itineraries from localStorage on mount
   useEffect(() => {
@@ -411,6 +416,9 @@ function App() {
                   }`}
                 >
                   Contacts
+                  {pendingForMe > 0 && activeTab !== 'contacts' && (
+                    <span className="ml-1 sm:ml-2 inline-flex items-center justify-center w-2 h-2 rounded-full bg-red-500" />
+                  )}
                 </button>
                 <button
                   onClick={() => setActiveTab('dashboard')}
@@ -422,6 +430,11 @@ function App() {
                   }`}
                 >
                   Dashboard
+                  {pendingForMe > 0 && activeTab !== 'dashboard' && (
+                    <span className="ml-1 sm:ml-2 inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-xs font-medium bg-red-600 text-white">
+                      {pendingForMe}
+                    </span>
+                  )}
                 </button>
               </nav>
             </div>
@@ -623,7 +636,7 @@ function App() {
             <button
               onClick={() => setActiveTab('contacts')}
               aria-current={activeTab === 'contacts' ? 'page' : undefined}
-              className={`flex-1 flex flex-col items-center py-2 text-xs ${
+              className={`flex-1 flex flex-col items-center py-2 text-xs relative ${
                 activeTab === 'contacts' ? 'text-blue-400' : 'text-slate-400'
               }`}
             >
@@ -631,11 +644,14 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               Contacts
+              {pendingForMe > 0 && activeTab !== 'contacts' && (
+                <span className="absolute top-1 right-1/4 w-2 h-2 rounded-full bg-red-500" />
+              )}
             </button>
             <button
               onClick={() => setActiveTab('dashboard')}
               aria-current={activeTab === 'dashboard' ? 'page' : undefined}
-              className={`flex-1 flex flex-col items-center py-2 text-xs ${
+              className={`flex-1 flex flex-col items-center py-2 text-xs relative ${
                 activeTab === 'dashboard' ? 'text-blue-400' : 'text-slate-400'
               }`}
             >
@@ -643,6 +659,11 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               Dashboard
+              {pendingForMe > 0 && activeTab !== 'dashboard' && (
+                <span className="absolute top-1 right-1/4 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-medium bg-red-600 text-white">
+                  {pendingForMe}
+                </span>
+              )}
             </button>
           </div>
         </nav>
