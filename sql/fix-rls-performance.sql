@@ -238,14 +238,14 @@ DROP POLICY IF EXISTS "Users can read own handshakes" ON public.handshakes;
 CREATE POLICY "Users can read own handshakes"
   ON public.handshakes FOR SELECT
   USING (
-    (select auth.uid()) = initiator_id
-    OR (select auth.uid()) = receiver_id
+    (select auth.uid()) = initiator_user_id
+    OR (select auth.uid()) = receiver_user_id
   );
 
 DROP POLICY IF EXISTS "Users can create handshakes" ON public.handshakes;
 CREATE POLICY "Users can create handshakes"
   ON public.handshakes FOR INSERT
-  WITH CHECK ((select auth.uid()) = initiator_id);
+  WITH CHECK ((select auth.uid()) = initiator_user_id);
 
 -- ============================================================================
 -- USER_POINTS
