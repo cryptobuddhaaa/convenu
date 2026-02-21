@@ -10,7 +10,7 @@ import ItineraryTimeline from './components/ItineraryTimeline';
 import ShareDialog from './components/ShareDialog';
 import ContactsPage from './components/ContactsPage';
 import type { Itinerary } from './models/types';
-import { Toaster } from './components/Toast';
+import { Toaster, toast } from './components/Toast';
 import { ConfirmDialog, useConfirmDialog } from './components/ConfirmDialog';
 import { WalletButton } from './components/WalletButton';
 import { useUserWallet } from './hooks/useUserWallet';
@@ -22,7 +22,7 @@ type ActiveTab = 'itinerary' | 'contacts' | 'shared' | 'dashboard';
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { currentItinerary, itineraries, initialize, initialized, reset } = useItinerary();
+  const { currentItinerary, itineraries, initialize, initialized, reset, cloneItinerary } = useItinerary();
   const { initialize: initializeContacts, initialized: contactsInitialized, reset: resetContacts } = useContacts();
   const { initialize: initializeWallets, initialized: walletsInitialized, reset: resetWallets } = useUserWallet();
   const { initialize: initializeHandshakes, initialized: handshakesInitialized, handshakes, reset: resetHandshakes } = useHandshakes();
@@ -263,6 +263,30 @@ function App() {
                       <span className="hidden sm:inline">Back to My Itineraries</span>
                       <span className="sm:hidden">Back</span>
                     </a>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await cloneItinerary(sharedItinerary);
+                          toast.success('Itinerary added to your list!');
+                          setSharedItinerary(null);
+                        } catch (err) {
+                          const msg = err instanceof Error ? err.message : 'Failed to add itinerary';
+                          if (msg.startsWith('LIMIT_REACHED:')) {
+                            toast.error(msg.split(':').slice(1).join(':'));
+                          } else {
+                            toast.error(msg);
+                          }
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-500 whitespace-nowrap"
+                      aria-label="Add to My Itineraries"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span className="hidden sm:inline">Add to My Itineraries</span>
+                      <span className="sm:hidden">Add to Mine</span>
+                    </button>
                     <div className="flex items-center gap-2 sm:gap-3">
                       <div className="text-right hidden sm:block">
                         <p className="text-sm font-medium text-white">{user?.user_metadata?.full_name || user?.email}</p>
@@ -581,11 +605,35 @@ function App() {
                             Back to list
                           </button>
                         </div>
-                        <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-4 mb-6">
+                        <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-4 mb-6 flex items-center justify-between gap-4">
                           <p className="text-sm text-blue-200">
                             Viewing shared itinerary: <strong>{selectedSharedItinerary.title}</strong>
                             {selectedSharedItinerary.createdByName && ` from ${selectedSharedItinerary.createdByName}`}
                           </p>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await cloneItinerary(selectedSharedItinerary);
+                                toast.success('Itinerary added to your list!');
+                                setSelectedSharedItinerary(null);
+                                setActiveTab('itinerary');
+                              } catch (err) {
+                                const msg = err instanceof Error ? err.message : 'Failed to add itinerary';
+                                if (msg.startsWith('LIMIT_REACHED:')) {
+                                  toast.error(msg.split(':').slice(1).join(':'));
+                                } else {
+                                  toast.error(msg);
+                                }
+                              }
+                            }}
+                            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
+                            aria-label="Add to My Itineraries"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add to Mine
+                          </button>
                         </div>
                         <ItineraryTimeline sharedItinerary={selectedSharedItinerary} readOnly={true} />
                       </div>

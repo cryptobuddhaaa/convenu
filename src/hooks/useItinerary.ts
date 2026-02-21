@@ -27,6 +27,7 @@ interface ItineraryState {
   deleteEvent: (eventId: string) => Promise<void>;
   toggleChecklistItem: (itemId: string) => void;
   loadItinerary: (itinerary: Itinerary) => void;
+  cloneItinerary: (source: Itinerary) => Promise<string>;
   clearItinerary: () => Promise<void>;
   reset: () => void;
 }
@@ -510,6 +511,79 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
         };
       }
     });
+  },
+
+  cloneItinerary: async (source: Itinerary) => {
+    // Check itinerary limit
+    const currentItineraries = get().itineraries;
+    if (currentItineraries.length >= 10) {
+      throw new Error('LIMIT_REACHED:You have reached the maximum limit of 10 itineraries. Please delete an existing itinerary before adding a new one.');
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    // Re-generate event IDs so the clone is fully independent
+    const days = source.days.map((day) => ({
+      ...day,
+      events: day.events.map((event) => ({
+        ...event,
+        id: generateId(),
+      })),
+      checklist: (day.checklist || []).map((item) => ({
+        ...item,
+        id: generateId(),
+      })),
+    }));
+
+    const { data, error } = await supabase
+      .from('itineraries')
+      .insert({
+        user_id: user.id,
+        title: source.title,
+        start_date: source.startDate,
+        end_date: source.endDate,
+        location: source.location,
+        description: source.description,
+        data: { days, transitSegments: source.transitSegments || [] },
+        created_by_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Unknown',
+        created_by_email: user.email,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error cloning itinerary:', error);
+      if (error.message && error.message.includes('USER_LIMIT_REACHED:')) {
+        const message = error.message.split('USER_LIMIT_REACHED:')[1] || 'User limit reached';
+        throw new Error('USER_LIMIT_REACHED:' + message);
+      }
+      throw error;
+    }
+
+    const newItinerary: Itinerary = {
+      id: data.id,
+      title: source.title,
+      description: source.description,
+      startDate: source.startDate,
+      endDate: source.endDate,
+      location: source.location,
+      days,
+      transitSegments: source.transitSegments || [],
+      createdByName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Unknown',
+      createdByEmail: user.email,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+
+    set((state) => ({
+      itineraries: [newItinerary, ...state.itineraries],
+      currentItineraryId: data.id,
+    }));
+
+    return data.id;
   },
 
   clearItinerary: async () => {
