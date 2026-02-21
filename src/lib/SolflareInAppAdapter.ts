@@ -199,12 +199,12 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
         // Case 2: isConnected but no publicKey — unusual, try connect() with timeout
         debugLog('Case 2: isConnected but no publicKey, calling connect()');
         await this._connectWithTimeout(provider, 5000);
-        debugLog('connect() resolved. publicKey=' + (provider.publicKey?.toBase58?.() ?? 'null'));
+        debugLog('connect() resolved. publicKey=' + ((provider as SolflareProvider).publicKey?.toBase58?.() ?? 'null'));
       } else {
         // Case 3: Not connected — call connect() with timeout
         debugLog('Case 3: Not connected, calling connect()');
         await this._connectWithTimeout(provider, 5000);
-        debugLog('connect() resolved. publicKey=' + (provider.publicKey?.toBase58?.() ?? 'null'));
+        debugLog('connect() resolved. publicKey=' + ((provider as SolflareProvider).publicKey?.toBase58?.() ?? 'null'));
       }
 
       this._provider = provider;
