@@ -3,7 +3,6 @@ import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { WalletError, WalletConnectionError } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
 import { clusterApiUrl } from '@solana/web3.js';
 
 // Register Mobile Wallet Adapter for Android MWA support (only on Android devices)
@@ -44,18 +43,16 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
   // PhantomWalletAdapter: fallback for Phantom's iOS in-app browser where
   // Wallet Standard auto-detection has a timing race. Deduplicates automatically.
   //
-  // SolflareWalletAdapter: EXCLUDED inside Solflare's own in-app browser because
-  // its connect() imports @solflare-wallet/sdk which injects a fullscreen iframe
-  // (z-index 99999, position: fixed, 100% width/height) from connect.solflare.com.
-  // Inside Solflare's browser this iframe never resolves and blocks all touch events.
-  // Solflare's browser injects window.solflare natively, which Wallet Standard detects.
-  const isSolflareInApp = typeof window !== 'undefined' &&
-    !!(window as unknown as Record<string, unknown>).solflare;
+  // Solflare: NO legacy adapter — rely entirely on Wallet Standard.
+  // SolflareWalletAdapter imports @solflare-wallet/sdk whose connect() injects a
+  // fullscreen iframe (z-index 99999, position: fixed, 100% w/h) from connect.solflare.com.
+  // Inside Solflare's own in-app browser this iframe never resolves and blocks ALL touch
+  // events. Detecting the in-app browser via window.solflare is a timing race on iOS.
+  // Wallet Standard handles Solflare everywhere it matters:
+  //   - Solflare in-app browser: native window.solflare → Wallet Standard auto-registers
+  //   - Desktop extension: Wallet Standard auto-registers
   const wallets = useMemo(
-    () => isSolflareInApp
-      ? [new PhantomWalletAdapter()]
-      : [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => [new PhantomWalletAdapter()],
     [],
   );
 
