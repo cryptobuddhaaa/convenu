@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { useAuth } from './hooks/useAuth';
 import { useItinerary } from './hooks/useItinerary';
 import { useContacts } from './hooks/useContacts';
@@ -725,6 +726,7 @@ function App() {
 
       <Toaster />
       <ConfirmDialog {...dialogProps} />
+      <SpeedInsights />
     </div>
   );
 }
