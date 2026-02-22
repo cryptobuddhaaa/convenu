@@ -4,19 +4,12 @@
  */
 
 import type { ItineraryEvent } from '../models/types';
+import { authFetch } from '../lib/authFetch';
 
-export interface LumaEventsDebugInfo {
+export interface LumaEventsMetaInfo {
   calendarsQueried: number;
-  calendarSources: string[];
   totalCalendarEvents: number;
   lumaEventsFound: number;
-  nonMatchingEvents?: Array<{
-    summary: string;
-    organizer: string;
-    hasDescription: boolean;
-    descriptionSnippet: string | null;
-    attendeeEmails: string[];
-  }>;
 }
 
 export interface GoogleCalendarEvent {
@@ -78,12 +71,9 @@ class GoogleCalendarService {
   /**
    * Exchanges authorization code for access token (server-side)
    */
-  async exchangeCodeForToken(code: string): Promise<{ accessToken: string; refreshToken?: string }> {
-    const response = await fetch('/api/google-calendar/exchange-token', {
+  async exchangeCodeForToken(code: string): Promise<{ accessToken: string }> {
+    const response = await authFetch('/api/google-calendar/exchange-token', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify({ code }),
     });
 
@@ -101,12 +91,9 @@ class GoogleCalendarService {
     accessToken: string,
     timeMin?: string,
     timeMax?: string
-  ): Promise<{ events: GoogleCalendarEvent[]; debug?: LumaEventsDebugInfo }> {
-    const response = await fetch('/api/google-calendar/luma-events', {
+  ): Promise<{ events: GoogleCalendarEvent[]; meta?: LumaEventsMetaInfo }> {
+    const response = await authFetch('/api/google-calendar/luma-events', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify({
         accessToken,
         timeMin,
@@ -122,7 +109,7 @@ class GoogleCalendarService {
     const data = await response.json();
     return {
       events: data.events || [],
-      debug: data.debug,
+      meta: data.meta,
     };
   }
 
@@ -161,11 +148,8 @@ class GoogleCalendarService {
    * Stores access token securely (in memory for this session)
    * In production, this should be encrypted and stored securely
    */
-  storeAccessToken(accessToken: string, refreshToken?: string): void {
+  storeAccessToken(accessToken: string): void {
     sessionStorage.setItem('google_calendar_access_token', accessToken);
-    if (refreshToken) {
-      sessionStorage.setItem('google_calendar_refresh_token', refreshToken);
-    }
   }
 
   /**

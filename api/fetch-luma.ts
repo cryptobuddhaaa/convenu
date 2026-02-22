@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireAuth } from './_lib/auth.js';
 
 export default async function handler(
   req: VercelRequest,
@@ -9,32 +10,34 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { url } = req.query;
-
-  // Validate the URL parameter
-  if (!url || typeof url !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid url parameter' });
-  }
-
-  // Validate it's actually a Luma URL using proper URL parsing
-  let parsedUrl: URL;
   try {
-    parsedUrl = new URL(url);
-  } catch {
-    return res.status(400).json({ error: 'Invalid URL' });
-  }
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
 
-  const hostname = parsedUrl.hostname.toLowerCase();
-  if (hostname !== 'lu.ma' && !hostname.endsWith('.lu.ma') &&
-      hostname !== 'luma.com' && !hostname.endsWith('.luma.com')) {
-    return res.status(400).json({ error: 'URL must be from lu.ma or luma.com' });
-  }
+    const { url } = req.query;
 
-  if (parsedUrl.protocol !== 'https:') {
-    return res.status(400).json({ error: 'URL must use HTTPS' });
-  }
+    // Validate the URL parameter
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: 'Missing or invalid url parameter' });
+    }
 
-  try {
+    // Validate it's actually a Luma URL using proper URL parsing
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return res.status(400).json({ error: 'Invalid URL' });
+    }
+
+    const hostname = parsedUrl.hostname.toLowerCase();
+    if (hostname !== 'lu.ma' && !hostname.endsWith('.lu.ma') &&
+        hostname !== 'luma.com' && !hostname.endsWith('.luma.com')) {
+      return res.status(400).json({ error: 'URL must be from lu.ma or luma.com' });
+    }
+
+    if (parsedUrl.protocol !== 'https:') {
+      return res.status(400).json({ error: 'URL must use HTTPS' });
+    }
     // Fetch the Luma page server-side (no CORS restrictions)
     const response = await fetch(url, {
       headers: {
@@ -64,8 +67,7 @@ export default async function handler(
   } catch (error) {
     console.error('Error fetching Luma event:', error);
     return res.status(500).json({
-      error: 'Failed to fetch event data',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Failed to fetch event data'
     });
   }
 }

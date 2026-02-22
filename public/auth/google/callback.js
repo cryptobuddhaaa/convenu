@@ -28,12 +28,31 @@ if (error) {
 } else if (code) {
   console.log('Exchanging code for token...');
 
+  // Retrieve Supabase JWT from localStorage to authenticate with our API.
+  // Supabase stores session under a key like "sb-<project-ref>-auth-token".
+  function getSupabaseToken() {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        try {
+          const session = JSON.parse(localStorage.getItem(key));
+          return session?.access_token || null;
+        } catch { return null; }
+      }
+    }
+    return null;
+  }
+
+  const supabaseToken = getSupabaseToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (supabaseToken) {
+    headers['Authorization'] = 'Bearer ' + supabaseToken;
+  }
+
   // Exchange code for token
   fetch('/api/google-calendar/exchange-token', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: headers,
     body: JSON.stringify({ code }),
   })
     .then((response) => {

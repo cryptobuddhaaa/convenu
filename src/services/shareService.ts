@@ -3,12 +3,19 @@ import { supabase } from '../lib/supabase';
 import type { Itinerary } from '../models/types';
 import { ShareIdSchema, CompressedDataSchema } from '../lib/validation';
 
+export interface ShareVisibility {
+  hiddenDays: string[];   // ISO date strings of hidden days
+  hiddenEvents: string[]; // Event IDs to hide
+}
+
 export const shareService = {
   /**
    * Compress itinerary to URL-safe string (legacy method for backwards compatibility)
    */
   compressItinerary(itinerary: Itinerary): string {
-    const json = JSON.stringify(itinerary);
+    // Strip sensitive fields before embedding in URL
+    const { createdByEmail: _email, ...safeItinerary } = itinerary as Itinerary & { createdByEmail?: string };
+    const json = JSON.stringify(safeItinerary);
     return compressToEncodedURIComponent(json);
   },
 
@@ -19,7 +26,12 @@ export const shareService = {
     try {
       const json = decompressFromEncodedURIComponent(compressed);
       if (!json) return null;
-      return JSON.parse(json) as Itinerary;
+      const parsed = JSON.parse(json);
+      // Basic validation: ensure required fields exist and are correct types
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (typeof parsed.title !== 'string' || typeof parsed.startDate !== 'string') return null;
+      if (!Array.isArray(parsed.days)) return null;
+      return parsed as Itinerary;
     } catch (error) {
       console.error('Failed to decompress itinerary:', error);
       return null;
@@ -43,7 +55,7 @@ export const shareService = {
   /**
    * Generate shareable URL with database-backed short link
    */
-  async generateShareUrl(itinerary: Itinerary): Promise<string> {
+  async generateShareUrl(itinerary: Itinerary, visibility?: ShareVisibility): Promise<string> {
     try {
       // Check if a share link already exists for this itinerary
       const { data: existing, error: fetchError } = await supabase
@@ -55,8 +67,14 @@ export const shareService = {
       let shareId: string;
 
       if (existing && !fetchError) {
-        // Use existing share link
+        // Use existing share link — update visibility if provided
         shareId = existing.id;
+        if (visibility) {
+          await supabase
+            .from('shared_itineraries')
+            .update({ visibility })
+            .eq('id', shareId);
+        }
       } else {
         // Create new share link
         shareId = this.generateShareId();
@@ -66,6 +84,7 @@ export const shareService = {
           .insert({
             id: shareId,
             itinerary_id: itinerary.id,
+            visibility: visibility || null,
           });
 
         if (insertError) {
@@ -89,6 +108,18 @@ export const shareService = {
   },
 
   /**
+   * Load existing visibility config for an itinerary's share link
+   */
+  async getShareVisibility(itineraryId: string): Promise<ShareVisibility | null> {
+    const { data } = await supabase
+      .from('shared_itineraries')
+      .select('visibility')
+      .eq('itinerary_id', itineraryId)
+      .maybeSingle();
+    return data?.visibility || null;
+  },
+
+  /**
    * Load itinerary from URL parameters
    * Supports both new database-backed shares (?share=abc123) and legacy compressed URLs (?data=...)
    */
@@ -102,10 +133,10 @@ export const shareService = {
         // Validate share ID format (prevents injection and DoS)
         const shareId = ShareIdSchema.parse(shareIdRaw);
 
-        // Fetch the shared itinerary from database
+        // Fetch the shared itinerary from database (include visibility config)
         const { data: sharedLink, error: shareError } = await supabase
           .from('shared_itineraries')
-          .select('itinerary_id')
+          .select('itinerary_id, visibility')
           .eq('id', shareId)
           .single();
 
@@ -114,7 +145,7 @@ export const shareService = {
           return null;
         }
 
-        // Fetch the actual itinerary with all its data
+        // Fetch the actual itinerary with all its data (exclude created_by_email for privacy)
         const { data: itineraryData, error: itineraryError } = await supabase
           .from('itineraries')
           .select(`
@@ -125,7 +156,6 @@ export const shareService = {
             end_date,
             data,
             created_by_name,
-            created_by_email,
             created_at,
             updated_at
           `)
@@ -138,16 +168,32 @@ export const shareService = {
         }
 
         // Transform database format to app format
+        const visibility = sharedLink.visibility as ShareVisibility | null;
+        let days = itineraryData.data.days || [];
+
+        // Apply visibility filtering
+        if (visibility) {
+          if (visibility.hiddenDays?.length) {
+            days = days.filter((d: { date: string }) => !visibility.hiddenDays.includes(d.date));
+          }
+          if (visibility.hiddenEvents?.length) {
+            days = days.map((d: { events: { id: string }[] }) => ({
+              ...d,
+              events: d.events.filter((e: { id: string }) => !visibility.hiddenEvents.includes(e.id)),
+            }));
+          }
+        }
+
         const itinerary: Itinerary = {
           id: itineraryData.id,
           title: itineraryData.title,
           location: itineraryData.location,
           startDate: itineraryData.start_date,
           endDate: itineraryData.end_date,
-          days: itineraryData.data.days || [],
+          days,
           transitSegments: itineraryData.data.transitSegments || [],
           createdByName: itineraryData.created_by_name || 'Unknown',
-          createdByEmail: itineraryData.created_by_email,
+          createdByEmail: undefined, // Don't expose email in shared views
           createdAt: itineraryData.created_at,
           updatedAt: itineraryData.updated_at,
         };

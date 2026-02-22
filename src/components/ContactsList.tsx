@@ -1,10 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useContacts } from '../hooks/useContacts';
 import EditContactDialog from './EditContactDialog';
 import { extractLinkedInHandle } from '../lib/validation';
-import type { Contact } from '../models/types';
+import type { Contact, ContactNote } from '../models/types';
+import { supabase } from '../lib/supabase';
 import { toast } from './Toast';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
+import { HandshakeButton } from './HandshakeButton';
+import { useAuth } from '../hooks/useAuth';
+
+function getTimeAgo(dateStr: string): string {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return '1 day ago';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+  }
+  const months = Math.floor(diffDays / 30);
+  return `${months} month${months !== 1 ? 's' : ''} ago`;
+}
 
 interface ContactsListProps {
   itineraryId?: string; // If provided, filter contacts by itinerary
@@ -12,7 +31,8 @@ interface ContactsListProps {
 }
 
 export default function ContactsList({ itineraryId, contacts: providedContacts }: ContactsListProps) {
-  const { contacts, getContactsByItinerary, deleteContact } = useContacts();
+  const { contacts, getContactsByItinerary, deleteContact, updateContact } = useContacts();
+  const { user } = useAuth();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const { confirm, dialogProps } = useConfirmDialog();
 
@@ -21,6 +41,63 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
     : itineraryId
     ? getContactsByItinerary(itineraryId)
     : contacts;
+
+  // Batch-fetch last 3 timestamped notes for all displayed contacts
+  const [notesByContact, setNotesByContact] = useState<Map<string, ContactNote[]>>(new Map());
+
+  const fetchNotesForContacts = useCallback(async (contactIds: string[]) => {
+    if (contactIds.length === 0) {
+      setNotesByContact(new Map());
+      return;
+    }
+    try {
+      const { data } = await supabase
+        .from('contact_notes')
+        .select('id, contact_id, user_id, content, created_at')
+        .in('contact_id', contactIds)
+        .order('created_at', { ascending: false });
+
+      const grouped = new Map<string, ContactNote[]>();
+      if (data) {
+        for (const row of data) {
+          const cid = row.contact_id as string;
+          const list = grouped.get(cid) || [];
+          if (list.length < 3) {
+            list.push({
+              id: row.id as string,
+              contactId: cid,
+              userId: row.user_id as string,
+              content: row.content as string,
+              createdAt: row.created_at as string,
+            });
+            grouped.set(cid, list);
+          }
+        }
+      }
+      setNotesByContact(grouped);
+    } catch {
+      // Silently fail — notes are supplementary
+    }
+  }, []);
+
+  useEffect(() => {
+    const ids = displayContacts.map((c) => c.id);
+    fetchNotesForContacts(ids);
+  }, [displayContacts, fetchNotesForContacts]);
+
+  const handleToggleContacted = async (contact: Contact) => {
+    try {
+      if (contact.lastContactedAt) {
+        await updateContact(contact.id, { lastContactedAt: null });
+        toast.info(`Cleared contacted status for ${contact.firstName}`);
+      } else {
+        await updateContact(contact.id, { lastContactedAt: new Date().toISOString() });
+        toast.info(`Marked ${contact.firstName} as contacted`);
+      }
+    } catch {
+      toast.error('Failed to update contact.');
+    }
+  };
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -82,7 +159,7 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
           >
             <div className="flex justify-between items-start mb-3">
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-white">
+                <h3 className="text-base font-semibold text-white">
                   {contact.firstName} {contact.lastName}
                 </h3>
                 {contact.projectCompany && (
@@ -94,8 +171,23 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
               </div>
               <div className="flex gap-1">
                 <button
+                  onClick={() => handleToggleContacted(contact)}
+                  className={`${contact.lastContactedAt ? 'text-green-400 hover:text-red-400' : 'text-slate-400 hover:text-green-400'} p-1.5`}
+                  title={contact.lastContactedAt ? 'Clear contacted status' : 'Mark as contacted'}
+                  aria-label={contact.lastContactedAt ? 'Clear contacted status' : 'Mark as contacted'}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </button>
+                <button
                   onClick={() => setEditingContact(contact)}
-                  className="text-blue-400 hover:text-blue-300 p-1"
+                  className="text-blue-400 hover:text-blue-300 p-1.5"
                   title="Edit contact"
                   aria-label="Edit contact"
                 >
@@ -110,7 +202,7 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                 </button>
                 <button
                   onClick={() => handleDelete(contact)}
-                  className="text-red-400 hover:text-red-300 p-1"
+                  className="text-red-400 hover:text-red-300 p-1.5"
                   title="Delete contact"
                   aria-label="Delete contact"
                 >
@@ -175,9 +267,42 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                 </div>
               )}
 
+              {contact.tags && contact.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {contact.tags.map((tag) => (
+                    <span key={tag} className="px-1.5 py-0.5 text-xs rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/50">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {contact.notes && (
                 <div className="mt-2 text-sm text-slate-400 italic">
                   "{contact.notes}"
+                </div>
+              )}
+
+              {notesByContact.get(contact.id) && notesByContact.get(contact.id)!.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {notesByContact.get(contact.id)!.map((note) => {
+                    const noteDate = new Date(note.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const preview = note.content.length > 80 ? note.content.substring(0, 77) + '...' : note.content;
+                    return (
+                      <div key={note.id} className="text-xs text-slate-500">
+                        <span className="text-slate-600">{noteDate}:</span> {preview}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {contact.lastContactedAt && (
+                <div className="flex items-center mt-2 text-xs text-green-400">
+                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Contacted {getTimeAgo(contact.lastContactedAt)}
                 </div>
               )}
             </div>
@@ -203,12 +328,22 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                 </div>
               </div>
             )}
+
+            {user && (
+              <div className="mt-2 pt-2 border-t border-slate-700/50">
+                <HandshakeButton contact={contact} userId={user.id} />
+              </div>
+            )}
           </div>
         ))}
       </div>
 
       {editingContact && (
-        <EditContactDialog contact={editingContact} onClose={() => setEditingContact(null)} />
+        <EditContactDialog contact={editingContact} onClose={() => {
+          setEditingContact(null);
+          // Refresh notes in case user added/deleted from the modal
+          fetchNotesForContacts(displayContacts.map((c) => c.id));
+        }} />
       )}
 
       <ConfirmDialog {...dialogProps} />

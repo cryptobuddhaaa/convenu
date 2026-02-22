@@ -1,3 +1,5 @@
+import { authFetch } from '../lib/authFetch';
+
 export interface LumaEventData {
   title: string;
   startTime: string;
@@ -16,7 +18,10 @@ export const lumaService = {
   isLumaUrl(url: string): boolean {
     try {
       const urlObj = new URL(url);
-      return urlObj.hostname.includes('lu.ma') || urlObj.hostname.includes('luma.com');
+      // Use exact domain matching to prevent SSRF via subdomains like lu.ma.evil.com
+      const host = urlObj.hostname;
+      return host === 'lu.ma' || host === 'www.lu.ma' ||
+             host === 'luma.com' || host === 'www.luma.com';
     } catch {
       return false;
     }
@@ -35,7 +40,7 @@ export const lumaService = {
       // Use our serverless function as a CORS proxy
       const apiUrl = `/api/fetch-luma?url=${encodeURIComponent(lumaUrl)}`;
 
-      const response = await fetch(apiUrl, {
+      const response = await authFetch(apiUrl, {
         method: 'GET',
       });
 

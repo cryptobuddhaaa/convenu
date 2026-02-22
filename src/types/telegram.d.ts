@@ -49,6 +49,7 @@ interface TelegramWebApp {
   ready: () => void;
   expand: () => void;
   close: () => void;
+  openLink: (url: string) => void;
 }
 
 interface Telegram {
@@ -57,4 +58,6 @@ interface Telegram {
 
 interface Window {
   Telegram?: Telegram;
+  /** Promise that resolves when the Telegram WebApp SDK has loaded (set in index.html) */
+  __tgSdkReady?: Promise<void>;
 }

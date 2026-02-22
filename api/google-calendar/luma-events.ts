@@ -12,6 +12,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireAuth } from '../_lib/auth.js';
 
 interface GoogleCalendarItem {
   id: string;
@@ -96,7 +97,7 @@ async function fetchEventsFromCalendar(
     return [];
   }
 
-  const data = await response.json();
+  const data = await response.json() as { items?: GoogleCalendarItem[] };
   return data.items || [];
 }
 
@@ -107,6 +108,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
     const { accessToken, timeMin, timeMax } = req.body;
 
     if (!accessToken) {
@@ -137,7 +140,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Failed to fetch calendar list' });
     }
 
-    const calendarListData = await calendarListResponse.json();
+    const calendarListData = await calendarListResponse.json() as { items?: CalendarListEntry[] };
     const calendars: CalendarListEntry[] = calendarListData.items || [];
 
     // Step 2: Fetch events from all calendars in parallel
@@ -151,12 +154,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Step 3: Merge all events, deduplicate by event ID
     const seenIds = new Set<string>();
     const allEvents: GoogleCalendarItem[] = [];
-    const calendarSources: string[] = [];
 
-    for (const { calendarName, events } of eventsByCalendar) {
-      if (events.length > 0) {
-        calendarSources.push(`${calendarName} (${events.length})`);
-      }
+    for (const { events } of eventsByCalendar) {
       for (const event of events) {
         if (!seenIds.has(event.id)) {
           seenIds.add(event.id);
@@ -167,27 +166,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Step 4: Filter to only Luma events
     const lumaEvents = allEvents.filter(isLumaEvent);
-    const nonMatchingEvents = allEvents.filter((e) => !isLumaEvent(e));
-
-    // Always include debug info about non-matching events
-    const nonMatchingSamples = nonMatchingEvents.slice(0, 10).map((e) => ({
-      summary: e.summary,
-      organizer: e.organizer?.email || 'none',
-      hasDescription: !!e.description,
-      descriptionSnippet: e.description
-        ? e.description.substring(0, 500)
-        : null,
-      attendeeEmails: e.attendees?.map((a) => a.email).slice(0, 5) || [],
-    }));
 
     return res.status(200).json({
       events: lumaEvents,
-      debug: {
+      meta: {
         calendarsQueried: calendars.length,
-        calendarSources,
         totalCalendarEvents: allEvents.length,
         lumaEventsFound: lumaEvents.length,
-        nonMatchingEvents: nonMatchingSamples,
       },
     });
   } catch (error) {

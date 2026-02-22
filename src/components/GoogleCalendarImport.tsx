@@ -4,8 +4,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Calendar, Download, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Calendar, Download, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react';
 import { googleCalendarService, type GoogleCalendarEvent } from '../services/googleCalendarService';
+import { isTelegramWebApp } from '../lib/telegram';
 import type { Itinerary, ItineraryEvent } from '../models/types';
 
 interface GoogleCalendarImportProps {
@@ -20,6 +21,18 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
   const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showPreview) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowPreview(false);
+        setSelectedEvents(new Set());
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showPreview]);
 
   useEffect(() => {
     // Check if just connected from OAuth callback
@@ -63,22 +76,11 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       timeMax.setHours(23, 59, 59, 999);
       const timeMaxISO = timeMax.toISOString();
 
-      const { events, debug } = await googleCalendarService.fetchLumaEvents(
+      const { events, meta } = await googleCalendarService.fetchLumaEvents(
         accessToken,
         timeMin,
         timeMaxISO
       );
-
-      // Log debug info to help diagnose detection issues
-      if (debug) {
-        console.log('Luma import debug:', {
-          calendarsQueried: debug.calendarsQueried,
-          calendarSources: debug.calendarSources,
-          totalCalendarEvents: debug.totalCalendarEvents,
-          lumaEventsFound: debug.lumaEventsFound,
-          nonMatchingEvents: debug.nonMatchingEvents,
-        });
-      }
 
       setLumaEvents(events);
 
@@ -90,19 +92,9 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       } else {
         let errorMsg = `No Luma events found in your calendar between ${new Date(itinerary.startDate).toLocaleDateString()} and ${new Date(itinerary.endDate).toLocaleDateString()}.`;
 
-        if (debug && debug.totalCalendarEvents > 0) {
-          errorMsg += `\n\nFound ${debug.totalCalendarEvents} calendar event(s) in this range, but none matched Luma filters (organizer @lu.ma, attendee @lu.ma, or lu.ma/luma.com link in description).`;
-
-          if (debug.nonMatchingEvents && debug.nonMatchingEvents.length > 0) {
-            errorMsg += '\n\nNon-matching events:';
-            for (const sample of debug.nonMatchingEvents) {
-              errorMsg += `\n• "${sample.summary}" — organizer: ${sample.organizer}, description: ${sample.hasDescription ? 'yes' : 'none'}`;
-              if (sample.descriptionSnippet) {
-                errorMsg += `\n  Snippet: ${sample.descriptionSnippet.substring(0, 200)}`;
-              }
-            }
-          }
-        } else if (debug && debug.totalCalendarEvents === 0) {
+        if (meta && meta.totalCalendarEvents > 0) {
+          errorMsg += `\n\nFound ${meta.totalCalendarEvents} calendar event(s) in this range, but none matched Luma filters (organizer @lu.ma, attendee @lu.ma, or lu.ma/luma.com link in description).`;
+        } else if (meta && meta.totalCalendarEvents === 0) {
           errorMsg += '\n\nNo calendar events at all were found in this date range.';
         }
 
@@ -160,10 +152,15 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
 
   return (
     <div className="space-y-4">
-      {!isConnected ? (
+      {isTelegramWebApp() ? (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-400">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>Google Calendar import is available in the browser version</span>
+        </div>
+      ) : !isConnected ? (
         <button
           onClick={handleConnect}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-700 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors shadow-sm"
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors shadow-sm"
         >
           <Calendar className="w-4 h-4" />
           Connect Google Calendar
@@ -174,7 +171,7 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
             <button
               onClick={handleFetchLumaEvents}
               disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -210,11 +207,11 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
 
       {/* Event Preview Modal */}
       {showPreview && lumaEvents.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="gcal-import-title">
           <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-700">
-              <h2 className="text-xl font-semibold text-white">
+              <h2 id="gcal-import-title" className="text-xl font-semibold text-white">
                 Import Luma Events ({selectedEvents.size} selected)
               </h2>
               <p className="text-sm text-slate-400 mt-1">
@@ -271,14 +268,14 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
                   setShowPreview(false);
                   setSelectedEvents(new Set());
                 }}
-                className="px-4 py-2 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-700 transition-colors"
+                className="px-3 py-1.5 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-700 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleImport}
                 disabled={selectedEvents.size === 0 || isLoading}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isLoading ? (
                   <>

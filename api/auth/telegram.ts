@@ -17,7 +17,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 /** Synthetic email domain for Telegram-only users */
-const TG_EMAIL_DOMAIN = 'tg.shareable-itinerary.app';
+const TG_EMAIL_DOMAIN = 'tg.convenu.app';
 
 /**
  * Verify Telegram Mini App initData using HMAC-SHA-256.
@@ -84,8 +84,9 @@ interface TelegramWebAppUser {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers for Mini App context
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // CORS headers for Mini App context — restrict to our own origin
+  const allowedOrigin = process.env.WEBAPP_URL || 'https://convenu.vercel.app';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -151,14 +152,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (createError) {
         // User already exists (e.g. previously unlinked) — look them up by email
-        const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
+        // Paginate through users in small batches instead of loading all into memory
+        let existingUser = null;
+        let page = 1;
+        const perPage = 50;
 
-        if (listError) {
-          console.error('Error listing users:', listError);
-          return res.status(500).json({ error: 'Failed to create or find user account' });
+        while (!existingUser) {
+          const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
+            page,
+            perPage,
+          });
+
+          if (listError) {
+            console.error('Error listing users:', listError);
+            return res.status(500).json({ error: 'Failed to create or find user account' });
+          }
+
+          const users = listData?.users || [];
+          existingUser = users.find((u: { email?: string }) => u.email === syntheticEmail);
+
+          if (existingUser || users.length < perPage) break;
+          page++;
         }
-
-        const existingUser = listData?.users?.find((u: { email?: string }) => u.email === syntheticEmail);
 
         if (!existingUser) {
           console.error('Error finding existing user: User not found');

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" fill="none" stroke="white" stroke-width="5.5" stroke-linecap="round">
+  <!-- Left figure head -->
+  <circle cx="75" cy="36" r="5.5" fill="none"/>
+  <!-- Right figure head -->
+  <circle cx="125" cy="33" r="5.5" fill="none"/>
+  <!-- Left figure arm reaching right -->
+  <path d="M60 56 Q78 48 100 54"/>
+  <!-- Left figure lower body arc -->
+  <path d="M40 88 Q52 68 68 56"/>
+  <!-- Right figure arm/shoulder -->
+  <path d="M108 52 Q122 45 138 50"/>
+  <!-- Right figure lower body arc -->
+  <path d="M138 50 Q148 62 158 88"/>
+</svg>

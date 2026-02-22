@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useItinerary } from '../hooks/useItinerary';
 import { CreateEventSchema } from '../lib/validation';
 import { z } from 'zod';
@@ -31,6 +31,14 @@ export default function EditEventDialog({ event, dayDate, onClose }: EditEventDi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingLuma, setIsLoadingLuma] = useState(false);
   const [lumaError, setLumaError] = useState('');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleFetchFromLuma = async () => {
     if (!lumaUrl || !lumaService.isLumaUrl(lumaUrl)) {
@@ -336,14 +344,14 @@ export default function EditEventDialog({ event, dayDate, onClose }: EditEventDi
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-600 rounded-md hover:bg-slate-700"
+              className="px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-600 rounded-md hover:bg-slate-700"
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-400"
+              className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-400"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Saving...' : 'Save Changes'}

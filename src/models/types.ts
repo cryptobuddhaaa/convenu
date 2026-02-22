@@ -86,9 +86,77 @@ export interface Contact {
   email?: string;
   linkedin?: string;
   notes?: string;
+  tags?: string[]; // Tag names assigned to this contact (max 3)
   eventTitle?: string; // Denormalized from event for easier display
   lumaEventUrl?: string; // Luma URL from the event (denormalized)
   dateMet?: string; // ISO8601 date
+  lastContactedAt?: string | null; // ISO8601 datetime — when user last reached out
   createdAt: string; // ISO8601 datetime
   updatedAt: string; // ISO8601 datetime
+}
+
+export interface UserTag {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface ContactNote {
+  id: string;
+  contactId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+}
+
+// Web3 types
+
+export interface UserWallet {
+  id: string;
+  userId: string;
+  walletAddress: string;
+  isPrimary: boolean;
+  verifiedAt: string | null;
+  createdAt: string;
+}
+
+export type HandshakeStatus = 'pending' | 'claimed' | 'matched' | 'minted' | 'expired';
+
+export interface Handshake {
+  id: string;
+  initiatorUserId: string;
+  receiverUserId: string | null;
+  receiverIdentifier: string;
+  contactId: string | null;
+  eventId: string | null;
+  eventTitle: string | null;
+  eventDate: string | null;
+  initiatorWallet: string | null;
+  receiverWallet: string | null;
+  initiatorMintedAt: string | null;
+  receiverMintedAt: string | null;
+  status: HandshakeStatus;
+  initiatorNftAddress: string | null;
+  receiverNftAddress: string | null;
+  initiatorTxSignature: string | null;
+  receiverTxSignature: string | null;
+  pointsAwarded: number;
+  mintFeeLamports: number;
+  createdAt: string;
+  expiresAt: string;
+  initiatorName?: string; // Resolved server-side for receiver handshakes (not a DB column)
+  initiatorEmail?: string; // Resolved server-side for receiver handshakes (not a DB column)
+}
+
+export interface TrustScore {
+  userId: string;
+  telegramPremium: boolean;
+  hasProfilePhoto: boolean;
+  hasUsername: boolean;
+  telegramAccountAgeDays: number | null;
+  walletConnected: boolean;
+  totalHandshakes: number;
+  trustLevel: number;
+  updatedAt: string;
 }

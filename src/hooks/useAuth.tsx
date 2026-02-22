@@ -51,11 +51,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function initAuth() {
+      // Wait for Telegram SDK to load (if running inside Telegram)
+      if (window.__tgSdkReady) await window.__tgSdkReady;
+
+      // Signal to Telegram that the web app is ready (hides Telegram's loading spinner)
+      try {
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+          tg.ready();
+          tg.expand();
+        }
+      } catch { /* not in Telegram context */ }
+
       // First, check for existing Supabase session
       const { data: { session: existingSession } } = await supabase.auth.getSession();
 
       if (existingSession) {
-        console.log('[Auth] Existing session found');
+
         if (!cancelled) {
           setSession(existingSession);
           setUser(existingSession.user);
@@ -64,14 +76,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Check for wallet_login token in URL (Telegram user opening in wallet browser)
+      const urlParams = new URLSearchParams(window.location.search);
+      const walletLoginToken = urlParams.get('wallet_login');
+      if (walletLoginToken) {
+        // Clean wallet_login from URL but preserve other params (e.g. ?claim=)
+        const cleanParams = new URLSearchParams(urlParams);
+        cleanParams.delete('wallet_login');
+        const cleanSearch = cleanParams.toString();
+        window.history.replaceState({}, '', window.location.pathname + (cleanSearch ? `?${cleanSearch}` : ''));
+        try {
+          const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
+            token_hash: walletLoginToken,
+            type: 'magiclink',
+          });
+          if (otpError) {
+            console.error('[Auth] Wallet login verification failed:', otpError);
+            toast.error('Login link expired or invalid. Please generate a new one.');
+          } else if (!cancelled && otpData?.session) {
+            setSession(otpData.session);
+            setUser(otpData.session.user);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error('[Auth] Wallet login error:', err);
+          toast.error('Login link failed. Please try again.');
+        }
+      }
+
       // No existing session — check if we're in a Telegram Mini App
       const initData = getTelegramInitData();
-      console.log('[Auth] Telegram initData:', initData ? `present (${initData.length} chars)` : 'not available');
+
 
       if (initData) {
         telegramAuthInProgress.current = true;
         try {
-          console.log('[Auth] Calling /api/auth/telegram...');
+
           const response = await fetch('/api/auth/telegram', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -88,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
 
           const { token_hash } = await response.json();
-          console.log('[Auth] Got token_hash, verifying OTP...');
+
 
           // Verify the OTP token to establish a real Supabase session
           const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
@@ -102,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('[Auth] OTP verification failed:', otpError);
             toast.error('Failed to establish session');
           } else {
-            console.log('[Auth] OTP verification succeeded, user:', otpData?.user?.id);
+
             // Set session directly from verifyOtp response
             if (!cancelled && otpData?.session) {
               setSession(otpData.session);
@@ -168,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     telegramAuthInProgress.current = true;
 
     try {
-      console.log('[Auth] Manual Telegram sign-in, calling /api/auth/telegram...');
+
       const response = await fetch('/api/auth/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -185,7 +226,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const { token_hash } = await response.json();
-      console.log('[Auth] Got token_hash, verifying OTP...');
 
       const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
         token_hash,
@@ -198,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('[Auth] OTP verification failed:', otpError);
         toast.error('Failed to establish session');
       } else {
-        console.log('[Auth] Telegram sign-in succeeded, user:', otpData?.user?.id);
+
         if (otpData?.session) {
           setSession(otpData.session);
           setUser(otpData.session.user);

@@ -115,6 +115,19 @@ export default function EventForm({ day, onClose }: EventFormProps) {
     };
     const mapsUrl = mapsService.generateMapsUrl(location);
 
+    // Validate lumaUrl has a safe scheme
+    let safeLumaUrl: string | undefined;
+    if (lumaUrl) {
+      try {
+        const parsed = new URL(lumaUrl);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          safeLumaUrl = lumaUrl;
+        }
+      } catch {
+        // Invalid URL — ignore
+      }
+    }
+
     const event: ItineraryEvent = {
       id: generateEventId(),
       title,
@@ -126,7 +139,7 @@ export default function EventForm({ day, onClose }: EventFormProps) {
         mapsUrl,
       },
       eventType,
-      lumaEventUrl: lumaUrl || undefined,
+      lumaEventUrl: safeLumaUrl,
       goals: goals ? goals.split(',').map(g => g.trim()) : [],
       notes: [],
     };

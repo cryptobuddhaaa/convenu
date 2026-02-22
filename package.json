@@ -1,5 +1,5 @@
 {
-  "name": "shareable-itinerary",
+  "name": "convenu",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,12 +10,25 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@metaplex-foundation/mpl-bubblegum": "^5.0.2",
+    "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
+    "@metaplex-foundation/umi": "^1.5.1",
+    "@metaplex-foundation/umi-bundle-defaults": "^1.5.1",
+    "@solana-mobile/wallet-standard-mobile": "^0.4.4",
+    "@solana/spl-account-compression": "^0.4.1",
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-phantom": "^0.9.28",
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@solana/wallet-adapter-react-ui": "^0.9.39",
+    "@solana/web3.js": "^1.98.4",
     "@supabase/supabase-js": "^2.94.0",
+    "bs58": "^6.0.0",
     "dompurify": "^3.3.1",
     "lucide-react": "^0.563.0",
     "lz-string": "^1.5.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "tweetnacl": "^1.0.3",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
   },
