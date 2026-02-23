@@ -124,14 +124,40 @@ export async function handleStart(
     .update({ used: true })
     .eq('code', code);
 
-  // Store trust signals from Telegram user profile
+  // Store trust signals from Telegram user profile and compute trust_level
   if (telegramUser) {
+    const { data: existing } = await supabase
+      .from('trust_scores')
+      .select('wallet_connected, total_handshakes, telegram_account_age_days')
+      .eq('user_id', linkCode.user_id)
+      .single();
+
+    const telegramPremium = telegramUser.is_premium || false;
+    const hasProfilePhoto = !!telegramUser.has_profile_photo;
+    const hasUsername = !!telegramUsername;
+    const walletConnected = existing?.wallet_connected || false;
+    const totalHandshakes = existing?.total_handshakes || 0;
+    const accountAgeDays = existing?.telegram_account_age_days;
+
+    let score = 1;
+    if (telegramPremium) score += 2;
+    if (hasProfilePhoto) score += 0.5;
+    if (hasUsername) score += 0.5;
+    if (accountAgeDays && accountAgeDays > 365) score += 0.5;
+    if (walletConnected) score += 0.5;
+    if (totalHandshakes >= 3) score += 0.5;
+    const trustLevel = Math.min(5, Math.max(1, Math.round(score)));
+
     await supabase.from('trust_scores').upsert(
       {
         user_id: linkCode.user_id,
-        telegram_premium: telegramUser.is_premium || false,
-        has_profile_photo: !!telegramUser.has_profile_photo,
-        has_username: !!telegramUsername,
+        telegram_premium: telegramPremium,
+        has_profile_photo: hasProfilePhoto,
+        has_username: hasUsername,
+        telegram_account_age_days: accountAgeDays,
+        wallet_connected: walletConnected,
+        total_handshakes: totalHandshakes,
+        trust_level: trustLevel,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' }

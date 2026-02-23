@@ -198,7 +198,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // 5. Generate a magic link token for the user (creates a real Supabase session)
+    // 5. Write Telegram trust signals and compute trust_level
+    {
+      // Fetch existing trust data for non-Telegram signals (wallet, handshakes)
+      const { data: existing } = await supabase
+        .from('trust_scores')
+        .select('wallet_connected, total_handshakes, telegram_account_age_days')
+        .eq('user_id', userId)
+        .single();
+
+      const telegramPremium = tgUser.is_premium || false;
+      const hasProfilePhoto = !!tgUser.photo_url;
+      const hasUsername = !!tgUser.username;
+      const walletConnected = existing?.wallet_connected || false;
+      const totalHandshakes = existing?.total_handshakes || 0;
+      const accountAgeDays = existing?.telegram_account_age_days;
+
+      let score = 1;
+      if (telegramPremium) score += 2;
+      if (hasProfilePhoto) score += 0.5;
+      if (hasUsername) score += 0.5;
+      if (accountAgeDays && accountAgeDays > 365) score += 0.5;
+      if (walletConnected) score += 0.5;
+      if (totalHandshakes >= 3) score += 0.5;
+      const trustLevel = Math.min(5, Math.max(1, Math.round(score)));
+
+      await supabase.from('trust_scores').upsert(
+        {
+          user_id: userId,
+          telegram_premium: telegramPremium,
+          has_profile_photo: hasProfilePhoto,
+          has_username: hasUsername,
+          telegram_account_age_days: accountAgeDays,
+          wallet_connected: walletConnected,
+          total_handshakes: totalHandshakes,
+          trust_level: trustLevel,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+    }
+
+    // 6. Generate a magic link token for the user (creates a real Supabase session)
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: userEmail,
@@ -209,7 +250,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Failed to generate session' });
     }
 
-    // 6. Return the token hash to the client
+    // 7. Return the token hash to the client
     return res.status(200).json({
       token_hash: linkData.properties.hashed_token,
       user_id: userId,

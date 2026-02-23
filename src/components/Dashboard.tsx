@@ -90,6 +90,18 @@ export default function Dashboard() {
     const loadData = async () => {
       setLoading(true);
       try {
+        // Trigger trust score recomputation before reading
+        const session = (await supabase.auth.getSession()).data.session;
+        if (session?.access_token) {
+          await fetch('/api/trust/compute', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          }).catch(() => { /* non-fatal — read stale data below */ });
+        }
+
         const { data: trustData } = await supabase
           .from('trust_scores')
           .select('user_id, telegram_premium, has_profile_photo, has_username, telegram_account_age_days, wallet_connected, total_handshakes, trust_level, updated_at')
