@@ -18,6 +18,8 @@ import com.convenu.app.ui.screens.contacts.ContactsScreen
 import com.convenu.app.ui.screens.dashboard.DashboardScreen
 import com.convenu.app.ui.screens.handshake.HandshakeDetailScreen
 import com.convenu.app.ui.screens.handshake.HandshakeListScreen
+import com.convenu.app.ui.screens.itinerary.ItineraryDetailScreen
+import com.convenu.app.ui.screens.itinerary.ItineraryListScreen
 import com.convenu.app.ui.screens.login.LoginScreen
 import com.convenu.app.ui.screens.wallet.WalletScreen
 
@@ -36,6 +38,7 @@ fun ConvenuNavHost() {
         Routes.CONTACTS,
         Routes.HANDSHAKES,
         Routes.WALLET,
+        Routes.ITINERARIES,
     )
 
     Scaffold(
@@ -78,6 +81,11 @@ fun ConvenuNavHost() {
                     onNavigateToWallet = {
                         navController.navigate(Routes.WALLET)
                     },
+                    onLogout = {
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
                 )
             }
 
@@ -95,9 +103,7 @@ fun ConvenuNavHost() {
 
             composable(
                 route = Routes.HANDSHAKE_DETAIL,
-                arguments = listOf(
-                    navArgument("handshakeId") { type = NavType.StringType },
-                ),
+                arguments = listOf(navArgument("handshakeId") { type = NavType.StringType }),
             ) { backStackEntry ->
                 val handshakeId = backStackEntry.arguments?.getString("handshakeId") ?: return@composable
                 HandshakeDetailScreen(
@@ -108,8 +114,26 @@ fun ConvenuNavHost() {
 
             composable(Routes.WALLET) {
                 WalletScreen(
-                    onConnect = { /* ActivityResultSender wired at Activity level */ },
-                    onVerify = { /* ActivityResultSender wired at Activity level */ },
+                    onConnect = {},
+                    onVerify = {},
+                )
+            }
+
+            composable(Routes.ITINERARIES) {
+                ItineraryListScreen(
+                    onItineraryClick = { itineraryId ->
+                        navController.navigate(Routes.itineraryDetail(itineraryId))
+                    },
+                )
+            }
+
+            composable(
+                route = Routes.ITINERARY_DETAIL,
+                arguments = listOf(navArgument("itineraryId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val itineraryId = backStackEntry.arguments?.getString("itineraryId") ?: return@composable
+                ItineraryDetailScreen(
+                    onBack = { navController.popBackStack() },
                 )
             }
         }

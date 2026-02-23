@@ -3,6 +3,7 @@ package com.convenu.app.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.FlightTakeoff
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.Icon
@@ -22,6 +23,7 @@ data class BottomNavItem(
 
 val bottomNavItems = listOf(
     BottomNavItem("Dashboard", Routes.DASHBOARD, Icons.Filled.Dashboard),
+    BottomNavItem("Trips", Routes.ITINERARIES, Icons.Filled.FlightTakeoff),
     BottomNavItem("Contacts", Routes.CONTACTS, Icons.Filled.People),
     BottomNavItem("Handshakes", Routes.HANDSHAKES, Icons.Filled.Handshake),
     BottomNavItem("Wallet", Routes.WALLET, Icons.Filled.AccountBalanceWallet),
