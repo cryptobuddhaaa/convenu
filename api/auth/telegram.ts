@@ -10,6 +10,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { estimateTelegramAccountAgeDays } from '../_lib/telegram-age.js';
+import { hasProfilePhoto } from '../telegram/_lib/telegram.js';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -208,7 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .single();
 
       const telegramPremium = tgUser.is_premium || false;
-      const hasProfilePhoto = !!tgUser.photo_url;
+      const userHasPhoto = !!tgUser.photo_url || await hasProfilePhoto(telegramUserId);
       const hasUsername = !!tgUser.username;
       const walletConnected = existing?.wallet_connected || false;
       const totalHandshakes = existing?.total_handshakes || 0;
@@ -231,7 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Socials (max 20)
       let scoreSocials = 0;
       if (telegramPremium) scoreSocials += 8;
-      if (hasProfilePhoto) scoreSocials += 3;
+      if (userHasPhoto) scoreSocials += 3;
       if (hasUsername) scoreSocials += 3;
       if (accountAgeDays != null && accountAgeDays > 365) scoreSocials += 3;
       if (xVerified) scoreSocials += 3;
@@ -249,7 +250,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         {
           user_id: userId,
           telegram_premium: telegramPremium,
-          has_profile_photo: hasProfilePhoto,
+          has_profile_photo: userHasPhoto,
           has_username: hasUsername,
           telegram_account_age_days: accountAgeDays,
           wallet_connected: walletConnected,

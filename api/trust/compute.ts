@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from '../_lib/auth.js';
 import { enrichWalletData } from '../_lib/wallet-enrich.js';
 import { estimateTelegramAccountAgeDays } from '../_lib/telegram-age.js';
+import { hasProfilePhoto } from '../telegram/_lib/telegram.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -132,18 +133,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Fetch linked Telegram user ID (used for account age + profile photo)
+    const { data: tgLink } = await supabase
+      .from('telegram_links')
+      .select('telegram_user_id')
+      .eq('user_id', userId)
+      .single();
+
     // Estimate Telegram account age if not yet computed
     let telegramAccountAgeDays = existing?.telegram_account_age_days as number | null;
-    if (telegramAccountAgeDays == null) {
-      const { data: tgLink } = await supabase
-        .from('telegram_links')
-        .select('telegram_user_id')
-        .eq('user_id', userId)
-        .single();
+    if (telegramAccountAgeDays == null && tgLink?.telegram_user_id) {
+      telegramAccountAgeDays = estimateTelegramAccountAgeDays(tgLink.telegram_user_id);
+    }
 
-      if (tgLink?.telegram_user_id) {
-        telegramAccountAgeDays = estimateTelegramAccountAgeDays(tgLink.telegram_user_id);
-      }
+    // Freshly check profile photo via Bot API (the User object doesn't include this field)
+    let userHasPhoto = existing?.has_profile_photo || false;
+    if (tgLink?.telegram_user_id) {
+      userHasPhoto = await hasProfilePhoto(tgLink.telegram_user_id);
     }
 
     // Count completed handshakes
@@ -163,7 +169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       walletTxCount,
       walletHasTokens,
       telegramPremium: existing?.telegram_premium || false,
-      hasProfilePhoto: existing?.has_profile_photo || false,
+      hasProfilePhoto: userHasPhoto,
       hasUsername: existing?.has_username || false,
       telegramAccountAgeDays,
       xVerified: existing?.x_verified || false,

@@ -1,7 +1,7 @@
 // /start command handler — account linking & welcome
 
 import { supabase, WEBAPP_URL } from '../_lib/config.js';
-import { sendMessage } from '../_lib/telegram.js';
+import { sendMessage, hasProfilePhoto } from '../_lib/telegram.js';
 import { getLinkedUserId } from '../_lib/state.js';
 import { estimateTelegramAccountAgeDays } from '../../_lib/telegram-age.js';
 
@@ -10,7 +10,7 @@ export async function handleStart(
   telegramUserId: number,
   telegramUsername: string | undefined,
   args: string,
-  telegramUser?: { is_premium?: boolean; has_profile_photo?: boolean }
+  telegramUser?: { is_premium?: boolean }
 ) {
   if (!args) {
     const linked = await getLinkedUserId(telegramUserId);
@@ -148,7 +148,7 @@ export async function handleStart(
       .single();
 
     const telegramPremium = telegramUser.is_premium || false;
-    const hasProfilePhoto = !!telegramUser.has_profile_photo;
+    const userHasPhoto = await hasProfilePhoto(telegramUserId);
     const hasUsername = !!telegramUsername;
     const walletConnected = existing?.wallet_connected || false;
     const totalHandshakes = existing?.total_handshakes || 0;
@@ -168,7 +168,7 @@ export async function handleStart(
     scoreWallet = Math.min(20, scoreWallet);
     let scoreSocials = 0;
     if (telegramPremium) scoreSocials += 8;
-    if (hasProfilePhoto) scoreSocials += 3;
+    if (userHasPhoto) scoreSocials += 3;
     if (hasUsername) scoreSocials += 3;
     if (accountAgeDays != null && accountAgeDays > 365) scoreSocials += 3;
     if (xVerified) scoreSocials += 3;
@@ -186,7 +186,7 @@ export async function handleStart(
       {
         user_id: linkCode.user_id,
         telegram_premium: telegramPremium,
-        has_profile_photo: hasProfilePhoto,
+        has_profile_photo: userHasPhoto,
         has_username: hasUsername,
         telegram_account_age_days: accountAgeDays,
         wallet_connected: walletConnected,
