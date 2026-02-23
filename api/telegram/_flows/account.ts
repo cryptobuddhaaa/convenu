@@ -3,6 +3,7 @@
 import { supabase, WEBAPP_URL } from '../_lib/config.js';
 import { sendMessage } from '../_lib/telegram.js';
 import { getLinkedUserId } from '../_lib/state.js';
+import { estimateTelegramAccountAgeDays } from '../../_lib/telegram-age.js';
 
 export async function handleStart(
   chatId: number,
@@ -151,7 +152,8 @@ export async function handleStart(
     const hasUsername = !!telegramUsername;
     const walletConnected = existing?.wallet_connected || false;
     const totalHandshakes = existing?.total_handshakes || 0;
-    const accountAgeDays = existing?.telegram_account_age_days;
+    const accountAgeDays = existing?.telegram_account_age_days
+      ?? estimateTelegramAccountAgeDays(telegramUserId);
     const walletAgeDays = existing?.wallet_age_days;
     const walletTxCount = existing?.wallet_tx_count;
     const walletHasTokens = existing?.wallet_has_tokens || false;

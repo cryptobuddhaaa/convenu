@@ -9,6 +9,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { estimateTelegramAccountAgeDays } from '../_lib/telegram-age.js';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -211,7 +212,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const hasUsername = !!tgUser.username;
       const walletConnected = existing?.wallet_connected || false;
       const totalHandshakes = existing?.total_handshakes || 0;
-      const accountAgeDays = existing?.telegram_account_age_days;
+      const accountAgeDays = existing?.telegram_account_age_days
+        ?? estimateTelegramAccountAgeDays(telegramUserId);
       const walletAgeDays = existing?.wallet_age_days;
       const walletTxCount = existing?.wallet_tx_count;
       const walletHasTokens = existing?.wallet_has_tokens || false;

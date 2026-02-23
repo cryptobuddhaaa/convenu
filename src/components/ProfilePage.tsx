@@ -39,6 +39,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
+  const [xVerified, setXVerified] = useState(false);
+  const [xConnecting, setXConnecting] = useState(false);
 
   const wallet = getPrimaryWallet();
 
@@ -85,6 +87,17 @@ export default function ProfilePage() {
         if (tgLink?.telegram_username) {
           setTelegramUsername(tgLink.telegram_username);
         }
+
+        // Load X verification status from trust_scores
+        const { data: trustData } = await supabase
+          .from('trust_scores')
+          .select('x_verified')
+          .eq('user_id', user.id)
+          .single();
+
+        if (trustData?.x_verified) {
+          setXVerified(true);
+        }
       } catch (err) {
         console.error('Failed to load profile:', err);
       } finally {
@@ -93,6 +106,25 @@ export default function ProfilePage() {
     };
 
     load();
+
+    // Handle X OAuth callback query params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('x_verified') === 'true') {
+      setXVerified(true);
+      toast.success('X account verified successfully');
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('x_error')) {
+      const errMap: Record<string, string> = {
+        denied: 'X authorization was denied',
+        invalid_state: 'Invalid OAuth state — please try again',
+        expired: 'OAuth session expired — please try again',
+        token_exchange: 'Failed to exchange token with X',
+        user_fetch: 'Failed to fetch X user info',
+        server: 'Server error during X verification',
+      };
+      toast.error(errMap[params.get('x_error')!] || 'X verification failed');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, [user]);
 
   const handleSave = async () => {
@@ -118,6 +150,24 @@ export default function ProfilePage() {
 
   const handleChange = (field: keyof ProfileData, value: string) => {
     setProfile((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleConnectX = async () => {
+    setXConnecting(true);
+    try {
+      const res = await authFetch('/api/auth/x', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to start X verification');
+        return;
+      }
+      const { authUrl } = await res.json();
+      window.location.href = authUrl;
+    } catch {
+      toast.error('Failed to start X verification');
+    } finally {
+      setXConnecting(false);
+    }
   };
 
   if (loading) {
@@ -154,6 +204,25 @@ export default function ProfilePage() {
             value={wallet ? `${wallet.walletAddress.slice(0, 4)}...${wallet.walletAddress.slice(-4)}` : 'Not linked'}
             connected={!!wallet}
           />
+          <div className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-3">
+              <div className={`w-2 h-2 rounded-full ${xVerified ? 'bg-green-400' : 'bg-slate-600'}`} />
+              <span className="text-sm text-slate-300">X / Twitter</span>
+            </div>
+            {xVerified ? (
+              <span className="text-sm font-mono text-slate-200">
+                {profile.twitter_handle || 'Verified'}
+              </span>
+            ) : (
+              <button
+                onClick={handleConnectX}
+                disabled={xConnecting}
+                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                {xConnecting ? 'Connecting...' : 'Verify'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -7,6 +7,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from '../_lib/auth.js';
+import { enrichWalletData } from '../_lib/wallet-enrich.js';
+import { estimateTelegramAccountAgeDays } from '../_lib/telegram-age.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -102,7 +104,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select('verified_at')
       .eq('user_id', userId);
 
-    const walletConnected = wallets?.some((w: { verified_at: string | null }) => w.verified_at != null) || false;
+    const verifiedWallet = wallets?.find((w: { verified_at: string | null }) => w.verified_at != null);
+    const walletConnected = !!verifiedWallet;
+
+    // Enrich wallet data from Solana RPC (age, tx count, token holdings)
+    let walletAgeDays = existing?.wallet_age_days as number | null;
+    let walletTxCount = existing?.wallet_tx_count as number | null;
+    let walletHasTokens = existing?.wallet_has_tokens || false;
+
+    if (walletConnected && verifiedWallet) {
+      // Fetch wallet address for RPC enrichment
+      const { data: walletRow } = await supabase
+        .from('user_wallets')
+        .select('wallet_address')
+        .eq('user_id', userId)
+        .not('verified_at', 'is', null)
+        .limit(1)
+        .single();
+
+      if (walletRow?.wallet_address) {
+        try {
+          const enrichment = await enrichWalletData(walletRow.wallet_address);
+          walletAgeDays = enrichment.walletAgeDays;
+          walletTxCount = enrichment.walletTxCount;
+          walletHasTokens = enrichment.walletHasTokens;
+        } catch (err) {
+          console.error('Wallet enrichment failed, using cached values:', err);
+        }
+      }
+    }
+
+    // Estimate Telegram account age if not yet computed
+    let telegramAccountAgeDays = existing?.telegram_account_age_days as number | null;
+    if (telegramAccountAgeDays == null) {
+      const { data: tgLink } = await supabase
+        .from('telegram_links')
+        .select('telegram_user_id')
+        .eq('user_id', userId)
+        .single();
+
+      if (tgLink?.telegram_user_id) {
+        telegramAccountAgeDays = estimateTelegramAccountAgeDays(tgLink.telegram_user_id);
+      }
+    }
 
     // Count completed handshakes
     const { count: handshakeCount } = await supabase
@@ -117,13 +161,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const signals = {
       totalHandshakes,
       walletConnected,
-      walletAgeDays: existing?.wallet_age_days as number | null,
-      walletTxCount: existing?.wallet_tx_count as number | null,
-      walletHasTokens: existing?.wallet_has_tokens || false,
+      walletAgeDays,
+      walletTxCount,
+      walletHasTokens,
       telegramPremium: existing?.telegram_premium || false,
       hasProfilePhoto: existing?.has_profile_photo || false,
       hasUsername: existing?.has_username || false,
-      telegramAccountAgeDays: existing?.telegram_account_age_days as number | null,
+      telegramAccountAgeDays,
       xVerified: existing?.x_verified || false,
     };
 
@@ -134,11 +178,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       telegram_premium: signals.telegramPremium,
       has_profile_photo: signals.hasProfilePhoto,
       has_username: signals.hasUsername,
-      telegram_account_age_days: signals.telegramAccountAgeDays,
+      telegram_account_age_days: telegramAccountAgeDays,
       wallet_connected: walletConnected,
-      wallet_age_days: signals.walletAgeDays,
-      wallet_tx_count: signals.walletTxCount,
-      wallet_has_tokens: signals.walletHasTokens,
+      wallet_age_days: walletAgeDays,
+      wallet_tx_count: walletTxCount,
+      wallet_has_tokens: walletHasTokens,
       x_verified: signals.xVerified,
       total_handshakes: totalHandshakes,
       trust_score: scores.trustScore,
