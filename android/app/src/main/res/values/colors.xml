@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="convenu_purple">#7C3AED</color>
+    <color name="convenu_purple_light">#A78BFA</color>
+    <color name="convenu_green">#10B981</color>
+    <color name="convenu_slate_900">#0F172A</color>
+    <color name="convenu_slate_800">#1E293B</color>
+    <color name="convenu_slate_700">#334155</color>
+    <color name="convenu_slate_400">#94A3B8</color>
+    <color name="convenu_slate_300">#CBD5E1</color>
+    <color name="convenu_white">#FFFFFF</color>
+</resources>

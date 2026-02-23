@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN"
-              "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-
-<svg xmlns="http://www.w3.org/2000/svg"
-     width="5.12in" height="5.12in"
-     viewBox="0 0 1536 1536">
-  <path id="Selection"
-        fill="white" stroke="none"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <clipPath id="rounded">
+      <rect width="64" height="64" rx="12"/>
+    </clipPath>
+  </defs>
+  <rect width="64" height="64" rx="12" fill="#0f172a"/>
+  <g clip-path="url(#rounded)">
+    <svg viewBox="0 0 1536 1536" width="64" height="64">
+      <path fill="white" stroke="none"
         d="M 830.00,475.21
            C 830.00,475.21 845.00,475.21 845.00,475.21
              845.00,475.21 857.00,476.10 857.00,476.10
@@ -129,5 +130,7 @@
            M 722.00,1042.00
            C 722.00,1042.00 721.00,1042.00 721.00,1042.00
              721.00,1042.00 722.00,1043.00 722.00,1043.00
-             722.00,1043.00 722.00,1042.00 722.00,1042.00 Z" />
+             722.00,1042.00 722.00,1042.00 722.00,1042.00 Z"/>
+    </svg>
+  </g>
 </svg>
