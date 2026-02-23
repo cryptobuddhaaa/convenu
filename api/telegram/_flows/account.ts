@@ -86,12 +86,26 @@ export async function handleStart(
     .single();
 
   if (existingLink && existingLink.user_id !== linkCode.user_id) {
-    await sendMessage(
-      chatId,
-      '❌ This Telegram account is already linked to a different account.\n\n' +
-        'You must unlink it from the other account first (web app → Contacts → Unlink Telegram).'
-    );
-    return;
+    // Check if the existing linked user is a synthetic Telegram-only account
+    // (auto-created by Mini App login). If so, allow re-linking to the real account.
+    const { data: existingUser } = await supabase.auth.admin.getUserById(existingLink.user_id);
+    const existingEmail = existingUser?.user?.email || '';
+    const isSyntheticAccount = existingEmail.startsWith('tg_') && existingEmail.endsWith('@tg.convenu.app');
+
+    if (!isSyntheticAccount) {
+      await sendMessage(
+        chatId,
+        '❌ This Telegram account is already linked to a different account.\n\n' +
+          'You must unlink it from the other account first (web app → Contacts → Unlink Telegram).'
+      );
+      return;
+    }
+
+    // Synthetic account — delete the old link so we can re-link to the real account below
+    await supabase
+      .from('telegram_links')
+      .delete()
+      .eq('telegram_user_id', telegramUserId);
   }
 
   // UNIQUENESS CHECK: Ensure the target user doesn't already have a different Telegram linked
@@ -124,11 +138,11 @@ export async function handleStart(
     .update({ used: true })
     .eq('code', code);
 
-  // Store trust signals from Telegram user profile and compute trust_level
+  // Store trust signals from Telegram user profile and compute trust score (0-100)
   if (telegramUser) {
     const { data: existing } = await supabase
       .from('trust_scores')
-      .select('wallet_connected, total_handshakes, telegram_account_age_days')
+      .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified')
       .eq('user_id', linkCode.user_id)
       .single();
 
@@ -138,15 +152,33 @@ export async function handleStart(
     const walletConnected = existing?.wallet_connected || false;
     const totalHandshakes = existing?.total_handshakes || 0;
     const accountAgeDays = existing?.telegram_account_age_days;
+    const walletAgeDays = existing?.wallet_age_days;
+    const walletTxCount = existing?.wallet_tx_count;
+    const walletHasTokens = existing?.wallet_has_tokens || false;
+    const xVerified = existing?.x_verified || false;
 
-    let score = 1;
-    if (telegramPremium) score += 2;
-    if (hasProfilePhoto) score += 0.5;
-    if (hasUsername) score += 0.5;
-    if (accountAgeDays && accountAgeDays > 365) score += 0.5;
-    if (walletConnected) score += 0.5;
-    if (totalHandshakes >= 3) score += 0.5;
-    const trustLevel = Math.min(5, Math.max(1, Math.round(score)));
+    const scoreHandshakes = Math.min(30, totalHandshakes);
+    let scoreWallet = 0;
+    if (walletConnected) scoreWallet += 5;
+    if (walletAgeDays != null && walletAgeDays > 90) scoreWallet += 5;
+    if (walletTxCount != null && walletTxCount > 10) scoreWallet += 5;
+    if (walletHasTokens) scoreWallet += 5;
+    scoreWallet = Math.min(20, scoreWallet);
+    let scoreSocials = 0;
+    if (telegramPremium) scoreSocials += 8;
+    if (hasProfilePhoto) scoreSocials += 3;
+    if (hasUsername) scoreSocials += 3;
+    if (accountAgeDays != null && accountAgeDays > 365) scoreSocials += 3;
+    if (xVerified) scoreSocials += 3;
+    scoreSocials = Math.min(20, scoreSocials);
+
+    const trustScore = scoreHandshakes + scoreWallet + scoreSocials;
+    let trustLevel: number;
+    if (trustScore >= 60) trustLevel = 5;
+    else if (trustScore >= 40) trustLevel = 4;
+    else if (trustScore >= 25) trustLevel = 3;
+    else if (trustScore >= 10) trustLevel = 2;
+    else trustLevel = 1;
 
     await supabase.from('trust_scores').upsert(
       {
@@ -156,7 +188,17 @@ export async function handleStart(
         has_username: hasUsername,
         telegram_account_age_days: accountAgeDays,
         wallet_connected: walletConnected,
+        wallet_age_days: walletAgeDays,
+        wallet_tx_count: walletTxCount,
+        wallet_has_tokens: walletHasTokens,
+        x_verified: xVerified,
         total_handshakes: totalHandshakes,
+        trust_score: trustScore,
+        score_handshakes: scoreHandshakes,
+        score_wallet: scoreWallet,
+        score_socials: scoreSocials,
+        score_events: 0,
+        score_community: 0,
         trust_level: trustLevel,
         updated_at: new Date().toISOString(),
       },

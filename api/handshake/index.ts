@@ -24,6 +24,39 @@ function isValidWalletAddress(addr: string): boolean {
   return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr);
 }
 
+/**
+ * Resolve a user's display name: check user_profiles first, then fall back to auth metadata.
+ */
+async function resolveUserName(userId: string): Promise<{
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}> {
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('first_name, last_name')
+    .eq('user_id', userId)
+    .single();
+
+  const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+  const email = authUser?.user?.email || '';
+
+  if (profile?.first_name || profile?.last_name) {
+    const firstName = profile.first_name || '';
+    const lastName = profile.last_name || '';
+    const fullName = `${firstName} ${lastName}`.trim() || email.split('@')[0] || 'Someone';
+    return { fullName, firstName, lastName, email };
+  }
+
+  const metaName = authUser?.user?.user_metadata?.full_name || '';
+  const parts = metaName.split(' ');
+  const firstName = parts[0] || email.split('@')[0] || 'Unknown';
+  const lastName = parts.slice(1).join(' ') || '';
+  const fullName = metaName || email.split('@')[0] || 'Someone';
+  return { fullName, firstName, lastName, email };
+}
+
 // ──────────────────────────────────────────────
 // Initiate
 // ──────────────────────────────────────────────
@@ -335,17 +368,14 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
       verifySignatures: false,
     });
 
-    // Look up the initiator's actual name for display
-    const { data: initiatorUser } = await supabase.auth.admin.getUserById(handshake.initiator_user_id);
-    const initiatorDisplayName = initiatorUser?.user?.user_metadata?.full_name
-      || initiatorUser?.user?.email?.split('@')[0]
-      || 'Someone';
+    // Look up the initiator's actual name for display (profile > metadata)
+    const initiatorInfo = await resolveUserName(handshake.initiator_user_id);
 
     return res.status(200).json({
       handshakeId,
       status: 'claimed',
       transaction: Buffer.from(serialized).toString('base64'),
-      initiatorName: `Handshake from ${initiatorDisplayName}`,
+      initiatorName: `Handshake from ${initiatorInfo.fullName}`,
     });
   } catch (error) {
     console.error('Handshake claim error:', error);
@@ -480,14 +510,14 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
     // When receiver pays, auto-add the initiator to the receiver's contacts
     if (side === 'receiver' && handshake.receiver_user_id && handshake.initiator_user_id) {
       try {
-        const { data: initiatorUser } = await supabase.auth.admin.getUserById(handshake.initiator_user_id);
+        const initiatorInfo = await resolveUserName(handshake.initiator_user_id);
         const { data: initiatorTelegram } = await supabase
           .from('telegram_links')
           .select('telegram_username')
           .eq('user_id', handshake.initiator_user_id)
           .single();
 
-        const initiatorEmail = initiatorUser?.user?.email || null;
+        const initiatorEmail = initiatorInfo.email || null;
         const initiatorTg = initiatorTelegram?.telegram_username || null;
 
         // Check if receiver already has this person as a contact (by email or telegram)
@@ -510,15 +540,10 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
         }
 
         if (!alreadyExists) {
-          const fullName = initiatorUser?.user?.user_metadata?.full_name || '';
-          const nameParts = fullName.split(' ');
-          const firstName = nameParts[0] || initiatorEmail?.split('@')[0] || 'Unknown';
-          const lastName = nameParts.slice(1).join(' ') || '';
-
           await supabase.from('contacts').insert({
             user_id: handshake.receiver_user_id,
-            first_name: firstName,
-            last_name: lastName,
+            first_name: initiatorInfo.firstName,
+            last_name: initiatorInfo.lastName,
             telegram_handle: initiatorTg,
             email: initiatorEmail,
             event_title: handshake.event_title || 'Handshake',
@@ -624,18 +649,14 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
 
     const eventInfo = handshake.event_title || 'Meeting';
 
-    // Look up names for both parties (for points history display)
-    const { data: initiatorUserData } = await supabase.auth.admin.getUserById(handshake.initiator_user_id);
-    const initiatorName = initiatorUserData?.user?.user_metadata?.full_name
-      || initiatorUserData?.user?.email?.split('@')[0]
-      || 'Unknown';
+    // Look up names for both parties (profile > metadata, for points history display)
+    const initiatorInfo = await resolveUserName(handshake.initiator_user_id);
+    const initiatorName = initiatorInfo.fullName;
 
     let receiverName = 'Unknown';
     if (handshake.receiver_user_id) {
-      const { data: receiverUserData } = await supabase.auth.admin.getUserById(handshake.receiver_user_id);
-      receiverName = receiverUserData?.user?.user_metadata?.full_name
-        || receiverUserData?.user?.email?.split('@')[0]
-        || 'Unknown';
+      const receiverInfo = await resolveUserName(handshake.receiver_user_id);
+      receiverName = receiverInfo.fullName;
     }
 
     // Also look up contact name from the initiator's contact record
@@ -828,14 +849,9 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
     const nameMap: Record<string, string> = {};
     const emailMap: Record<string, string> = {};
     for (const uid of initiatorIds) {
-      const { data: initiator } = await supabase.auth.admin.getUserById(uid);
-      if (initiator?.user) {
-        nameMap[uid] =
-          initiator.user.user_metadata?.full_name ||
-          initiator.user.email?.split('@')[0] ||
-          'Someone';
-        emailMap[uid] = initiator.user.email || '';
-      }
+      const info = await resolveUserName(uid);
+      nameMap[uid] = info.fullName;
+      emailMap[uid] = info.email;
     }
 
     const enriched = allRows.map((h) => ({

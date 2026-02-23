@@ -1,6 +1,7 @@
 /**
  * POST /api/trust/compute
- * Computes and stores trust score for a user based on available signals.
+ * Computes and stores the 0-100 trust score for a user across 5 categories:
+ *   Handshakes (30), Wallet (20), Socials (20), Events (20), Community (10)
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -12,6 +13,72 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
+/** Scoring constants */
+const MAX_HANDSHAKES = 30;
+const MAX_WALLET = 20;
+const MAX_SOCIALS = 20;
+const MAX_EVENTS = 20;
+const MAX_COMMUNITY = 10;
+
+export function computeTrustCategories(signals: {
+  totalHandshakes: number;
+  walletConnected: boolean;
+  walletAgeDays: number | null;
+  walletTxCount: number | null;
+  walletHasTokens: boolean;
+  telegramPremium: boolean;
+  hasProfilePhoto: boolean;
+  hasUsername: boolean;
+  telegramAccountAgeDays: number | null;
+  xVerified: boolean;
+}) {
+  // --- Handshakes (max 30): 1 point per minted handshake ---
+  const scoreHandshakes = Math.min(MAX_HANDSHAKES, signals.totalHandshakes);
+
+  // --- Wallet (max 20) ---
+  let scoreWallet = 0;
+  if (signals.walletConnected) scoreWallet += 5;
+  if (signals.walletAgeDays != null && signals.walletAgeDays > 90) scoreWallet += 5;
+  if (signals.walletTxCount != null && signals.walletTxCount > 10) scoreWallet += 5;
+  if (signals.walletHasTokens) scoreWallet += 5;
+  scoreWallet = Math.min(MAX_WALLET, scoreWallet);
+
+  // --- Socials (max 20) ---
+  let scoreSocials = 0;
+  if (signals.telegramPremium) scoreSocials += 8;
+  if (signals.hasProfilePhoto) scoreSocials += 3;
+  if (signals.hasUsername) scoreSocials += 3;
+  if (signals.telegramAccountAgeDays != null && signals.telegramAccountAgeDays > 365) scoreSocials += 3;
+  if (signals.xVerified) scoreSocials += 3;
+  scoreSocials = Math.min(MAX_SOCIALS, scoreSocials);
+
+  // --- Events (max 20): TBD — placeholder, always 0 for now ---
+  const scoreEvents = 0;
+
+  // --- Community (max 10): TBD — placeholder, always 0 for now ---
+  const scoreCommunity = 0;
+
+  const trustScore = scoreHandshakes + scoreWallet + scoreSocials + scoreEvents + scoreCommunity;
+
+  // Legacy 1-5 mapping (approximate: 0-100 → 1-5)
+  let trustLevel: number;
+  if (trustScore >= 60) trustLevel = 5;
+  else if (trustScore >= 40) trustLevel = 4;
+  else if (trustScore >= 25) trustLevel = 3;
+  else if (trustScore >= 10) trustLevel = 2;
+  else trustLevel = 1;
+
+  return {
+    trustScore,
+    scoreHandshakes,
+    scoreWallet,
+    scoreSocials,
+    scoreEvents,
+    scoreCommunity,
+    trustLevel,
+  };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -21,6 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const authUser = await requireAuth(req, res);
     if (!authUser) return;
     const userId = authUser.id;
+
     // Fetch existing trust data
     const { data: existing } = await supabase
       .from('trust_scores')
@@ -45,37 +113,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const totalHandshakes = handshakeCount || 0;
 
-    // Compute trust level (1-5)
-    let score = 1; // Base score
-    const telegramPremium = existing?.telegram_premium || false;
-    const hasProfilePhoto = existing?.has_profile_photo || false;
-    const hasUsername = existing?.has_username || false;
-    const accountAgeDays = existing?.telegram_account_age_days;
+    // Gather all signals
+    const signals = {
+      totalHandshakes,
+      walletConnected,
+      walletAgeDays: existing?.wallet_age_days as number | null,
+      walletTxCount: existing?.wallet_tx_count as number | null,
+      walletHasTokens: existing?.wallet_has_tokens || false,
+      telegramPremium: existing?.telegram_premium || false,
+      hasProfilePhoto: existing?.has_profile_photo || false,
+      hasUsername: existing?.has_username || false,
+      telegramAccountAgeDays: existing?.telegram_account_age_days as number | null,
+      xVerified: existing?.x_verified || false,
+    };
 
-    if (telegramPremium) score += 2;
-    if (hasProfilePhoto) score += 0.5;
-    if (hasUsername) score += 0.5;
-    if (accountAgeDays && accountAgeDays > 365) score += 0.5;
-    if (walletConnected) score += 0.5;
-    if (totalHandshakes >= 3) score += 0.5;
-
-    const trustLevel = Math.min(5, Math.max(1, Math.round(score)));
+    const scores = computeTrustCategories(signals);
 
     const trustData = {
       user_id: userId,
-      telegram_premium: telegramPremium,
-      has_profile_photo: hasProfilePhoto,
-      has_username: hasUsername,
-      telegram_account_age_days: accountAgeDays,
+      telegram_premium: signals.telegramPremium,
+      has_profile_photo: signals.hasProfilePhoto,
+      has_username: signals.hasUsername,
+      telegram_account_age_days: signals.telegramAccountAgeDays,
       wallet_connected: walletConnected,
+      wallet_age_days: signals.walletAgeDays,
+      wallet_tx_count: signals.walletTxCount,
+      wallet_has_tokens: signals.walletHasTokens,
+      x_verified: signals.xVerified,
       total_handshakes: totalHandshakes,
-      trust_level: trustLevel,
+      trust_score: scores.trustScore,
+      score_handshakes: scores.scoreHandshakes,
+      score_wallet: scores.scoreWallet,
+      score_socials: scores.scoreSocials,
+      score_events: scores.scoreEvents,
+      score_community: scores.scoreCommunity,
+      trust_level: scores.trustLevel,
       updated_at: new Date().toISOString(),
     };
 
     await supabase.from('trust_scores').upsert(trustData, { onConflict: 'user_id' });
 
-    return res.status(200).json({ trustLevel, totalHandshakes, walletConnected });
+    return res.status(200).json({
+      trustScore: scores.trustScore,
+      scoreHandshakes: scores.scoreHandshakes,
+      scoreWallet: scores.scoreWallet,
+      scoreSocials: scores.scoreSocials,
+      scoreEvents: scores.scoreEvents,
+      scoreCommunity: scores.scoreCommunity,
+      totalHandshakes,
+      walletConnected,
+    });
   } catch (error) {
     console.error('Trust compute error:', error);
     return res.status(500).json({ error: 'Failed to compute trust score' });

@@ -198,12 +198,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // 5. Write Telegram trust signals and compute trust_level
+    // 5. Write Telegram trust signals and compute trust score (0-100)
     {
-      // Fetch existing trust data for non-Telegram signals (wallet, handshakes)
       const { data: existing } = await supabase
         .from('trust_scores')
-        .select('wallet_connected, total_handshakes, telegram_account_age_days')
+        .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified')
         .eq('user_id', userId)
         .single();
 
@@ -213,15 +212,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const walletConnected = existing?.wallet_connected || false;
       const totalHandshakes = existing?.total_handshakes || 0;
       const accountAgeDays = existing?.telegram_account_age_days;
+      const walletAgeDays = existing?.wallet_age_days;
+      const walletTxCount = existing?.wallet_tx_count;
+      const walletHasTokens = existing?.wallet_has_tokens || false;
+      const xVerified = existing?.x_verified || false;
 
-      let score = 1;
-      if (telegramPremium) score += 2;
-      if (hasProfilePhoto) score += 0.5;
-      if (hasUsername) score += 0.5;
-      if (accountAgeDays && accountAgeDays > 365) score += 0.5;
-      if (walletConnected) score += 0.5;
-      if (totalHandshakes >= 3) score += 0.5;
-      const trustLevel = Math.min(5, Math.max(1, Math.round(score)));
+      // Handshakes (max 30): 1 per handshake
+      const scoreHandshakes = Math.min(30, totalHandshakes);
+      // Wallet (max 20)
+      let scoreWallet = 0;
+      if (walletConnected) scoreWallet += 5;
+      if (walletAgeDays != null && walletAgeDays > 90) scoreWallet += 5;
+      if (walletTxCount != null && walletTxCount > 10) scoreWallet += 5;
+      if (walletHasTokens) scoreWallet += 5;
+      scoreWallet = Math.min(20, scoreWallet);
+      // Socials (max 20)
+      let scoreSocials = 0;
+      if (telegramPremium) scoreSocials += 8;
+      if (hasProfilePhoto) scoreSocials += 3;
+      if (hasUsername) scoreSocials += 3;
+      if (accountAgeDays != null && accountAgeDays > 365) scoreSocials += 3;
+      if (xVerified) scoreSocials += 3;
+      scoreSocials = Math.min(20, scoreSocials);
+
+      const trustScore = scoreHandshakes + scoreWallet + scoreSocials;
+      let trustLevel: number;
+      if (trustScore >= 60) trustLevel = 5;
+      else if (trustScore >= 40) trustLevel = 4;
+      else if (trustScore >= 25) trustLevel = 3;
+      else if (trustScore >= 10) trustLevel = 2;
+      else trustLevel = 1;
 
       await supabase.from('trust_scores').upsert(
         {
@@ -231,7 +251,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           has_username: hasUsername,
           telegram_account_age_days: accountAgeDays,
           wallet_connected: walletConnected,
+          wallet_age_days: walletAgeDays,
+          wallet_tx_count: walletTxCount,
+          wallet_has_tokens: walletHasTokens,
+          x_verified: xVerified,
           total_handshakes: totalHandshakes,
+          trust_score: trustScore,
+          score_handshakes: scoreHandshakes,
+          score_wallet: scoreWallet,
+          score_socials: scoreSocials,
+          score_events: 0,
+          score_community: 0,
           trust_level: trustLevel,
           updated_at: new Date().toISOString(),
         },
