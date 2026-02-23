@@ -19,8 +19,8 @@ android {
         versionName = "1.0.0"
 
         buildConfigField("String", "API_BASE_URL", "\"https://app.convenu.xyz/api\"")
-        buildConfigField("String", "SUPABASE_URL", "\"\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"\"")
+        buildConfigField("String", "SUPABASE_URL", "\"https://cbxjgxrlsqfxaezjnjjs.supabase.co\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"sb_publishable_vtqiUCdcXZf8j1cVs960rA_sjo2i5Uk\"")
         buildConfigField("String", "SOLANA_NETWORK", "\"devnet\"")
         buildConfigField("String", "SOLANA_RPC_URL", "\"https://api.devnet.solana.com\"")
     }
