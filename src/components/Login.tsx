@@ -122,7 +122,10 @@ export default function Login() {
         </div>
 
         <p className="mt-4 text-center text-xs text-slate-500">
-          By signing in, you agree to our Terms of Service and Privacy Policy
+          By signing in, you agree to our{' '}
+          <a href="/terms-of-use.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-300">Terms of Use</a>
+          {' '}and{' '}
+          <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-300">Privacy Policy</a>
         </p>
       </div>
     </div>
