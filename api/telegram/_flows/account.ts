@@ -5,6 +5,7 @@ import { sendMessage } from '../_lib/telegram.js';
 import { getLinkedUserId } from '../_lib/state.js';
 import { estimateTelegramAccountAgeDays } from '../../_lib/telegram-age.js';
 import { computeTrustCategories } from '../../trust/compute.js';
+import { mergeAccounts } from '../../_lib/account-merge.js';
 
 export async function handleStart(
   chatId: number,
@@ -103,11 +104,17 @@ export async function handleStart(
       return;
     }
 
-    // Synthetic account — delete the old link so we can re-link to the real account below
-    await supabase
-      .from('telegram_links')
-      .delete()
-      .eq('telegram_user_id', telegramUserId);
+    // Synthetic account — merge all its data into the real account, then delete it.
+    // mergeAccounts() handles: itineraries, contacts, handshakes, trust scores,
+    // user profiles, wallets, points, tags, subscriptions, AI data, and deletes
+    // the synthetic auth user + its telegram_links entry.
+    try {
+      await mergeAccounts(existingLink.user_id, linkCode.user_id);
+    } catch (mergeErr) {
+      console.error('[account] Merge failed:', mergeErr);
+      // Non-fatal: link will still be re-created below.
+      // Worst case: some data stays orphaned on the deleted synthetic account.
+    }
   }
 
   // UNIQUENESS CHECK: Ensure the target user doesn't already have a different Telegram linked

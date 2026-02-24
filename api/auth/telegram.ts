@@ -127,6 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let userId: string;
     let userEmail: string;
+    let isNewAccount = false;
 
     if (link?.user_id) {
       // Existing linked user — get their email
@@ -192,6 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         userId = newUser.user.id;
         userEmail = syntheticEmail;
+        isNewAccount = true;
       }
 
       // 4. Re-create the telegram_links entry
@@ -277,6 +279,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       token_hash: linkData.properties.hashed_token,
       user_id: userId,
+      new_account: isNewAccount,
       telegram_user: {
         id: tgUser.id,
         first_name: tgUser.first_name,
