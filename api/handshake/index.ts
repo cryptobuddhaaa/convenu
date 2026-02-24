@@ -6,6 +6,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from '../_lib/auth.js';
+import { recomputeFromStored } from '../_lib/trust-recompute.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -770,6 +771,9 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
             total_handshakes: count || 0,
             updated_at: new Date().toISOString(),
           }, { onConflict: 'user_id' });
+
+        // Recompute trust score so it reflects updated handshake count
+        await recomputeFromStored(uid);
       }
     }
 

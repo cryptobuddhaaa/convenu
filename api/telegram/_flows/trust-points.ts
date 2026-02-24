@@ -48,7 +48,7 @@ export async function handleTrust(chatId: number, telegramUserId: number) {
 
   const { data: trust } = await supabase
     .from('trust_scores')
-    .select('trust_score, trust_level, score_handshakes, score_wallet, score_socials, score_events, score_community, telegram_premium, has_profile_photo, has_username, telegram_account_age_days, wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, x_verified, total_handshakes')
+    .select('trust_score, trust_level, score_handshakes, score_wallet, score_socials, score_events, score_community, telegram_premium, has_username, telegram_account_age_days, wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, x_verified, x_premium, total_handshakes')
     .eq('user_id', userId)
     .single();
 
@@ -94,10 +94,10 @@ export async function handleTrust(chatId: number, telegramUserId: number) {
       `${check(trust.wallet_has_tokens)} Holds tokens (+5)\n\n` +
       `<b>Social signals:</b>\n` +
       `${check(trust.telegram_premium)} Telegram Premium (+8)\n` +
-      `${check(trust.has_profile_photo)} Profile Photo (+3)\n` +
       `${check(trust.has_username)} Username (+3)\n` +
       `${check(trust.telegram_account_age_days != null && trust.telegram_account_age_days > 365)} Account Age > 1yr (+3)\n` +
-      `${check(trust.x_verified)} Verified X account (+3)\n\n` +
+      `${check(trust.x_verified)} Verified X account (+3)\n` +
+      `${check(trust.x_premium)} X Premium (+3)\n\n` +
       `Total Handshakes: ${trust.total_handshakes}`
   );
 }

@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { requireAuth } from '../_lib/auth.js';
+import { recomputeFromStored } from '../_lib/trust-recompute.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -151,6 +152,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         wallet_connected: true,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
+
+    // Recompute trust score so it reflects wallet_connected immediately
+    await recomputeFromStored(authUser.id);
 
     return res.status(200).json({ verified: true });
   } catch (error) {

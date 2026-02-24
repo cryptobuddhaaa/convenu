@@ -17,6 +17,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { requireAuth } from '../_lib/auth.js';
+import { recomputeFromStored } from '../_lib/trust-recompute.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -177,7 +178,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const userId = payload.userId as string;
 
       // UNIQUENESS CHECK: Ensure this X account isn't already verified by another user
-      const { data: existingOwner } = await supabase
+      // Check 1: by x_user_id (stable numeric ID, post-migration verifications)
+      const { data: ownerById, error: idCheckErr } = await supabase
         .from('trust_scores')
         .select('user_id')
         .eq('x_user_id', xUserId)
@@ -185,8 +187,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .neq('user_id', userId)
         .limit(1);
 
-      if (existingOwner && existingOwner.length > 0) {
+      if (!idCheckErr && ownerById && ownerById.length > 0) {
         return res.redirect(302, `${WEBAPP_URL}/profile?x_error=already_linked`);
+      }
+
+      // Check 2: by twitter_handle (catches pre-migration users who have x_verified
+      // but no x_user_id yet — their handle was stored in user_profiles)
+      if (xUsername) {
+        const { data: handleOwners } = await supabase
+          .from('user_profiles')
+          .select('user_id')
+          .eq('twitter_handle', `@${xUsername}`)
+          .neq('user_id', userId)
+          .limit(5);
+
+        if (handleOwners && handleOwners.length > 0) {
+          const otherIds = handleOwners.map((o: { user_id: string }) => o.user_id);
+          const { data: verifiedOwners } = await supabase
+            .from('trust_scores')
+            .select('user_id')
+            .in('user_id', otherIds)
+            .eq('x_verified', true)
+            .limit(1);
+
+          if (verifiedOwners && verifiedOwners.length > 0) {
+            return res.redirect(302, `${WEBAPP_URL}/profile?x_error=already_linked`);
+          }
+        }
       }
 
       // Set x_verified = true, premium status, X user ID, and store refresh token
@@ -217,6 +244,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             { onConflict: 'user_id' }
           );
       }
+
+      // Recompute trust score so it reflects the new X signals immediately
+      await recomputeFromStored(userId);
 
       return res.redirect(302, `${WEBAPP_URL}/profile?x_verified=true`);
     } catch (err) {
@@ -276,6 +306,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updated_at: new Date().toISOString(),
       })
       .eq('user_id', authUser.id);
+
+    // Recompute trust score so it reflects the removed X signals immediately
+    await recomputeFromStored(authUser.id);
 
     return res.status(200).json({ disconnected: true });
   }
