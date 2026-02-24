@@ -23,6 +23,13 @@ data class WalletConnection(
     override fun hashCode(): Int = publicKeyBase58.hashCode()
 }
 
+/** Data returned from [MwaWalletManager.authorizeAndSign] for server-side wallet auth. */
+data class WalletAuthData(
+    val walletAddress: String,
+    val message: String,
+    val signatureBase58: String,
+)
+
 sealed class WalletResult<out T> {
     data class Success<T>(val data: T) : WalletResult<T>()
     data class Error(val message: String) : WalletResult<Nothing>()
@@ -52,7 +59,7 @@ class MwaWalletManager @Inject constructor() {
 
             when (result) {
                 is TransactionResult.Success -> {
-                    val authResult = result.payload
+                    val authResult = result.successPayload
                     val publicKey = authResult.accounts.firstOrNull()?.publicKey
                     val authToken = authResult.authToken
 
@@ -85,6 +92,65 @@ class MwaWalletManager @Inject constructor() {
         }
     }
 
+    /**
+     * Authorize AND sign a login message in a single wallet interaction.
+     * Returns everything needed to authenticate with the server.
+     */
+    suspend fun authorizeAndSign(sender: ActivityResultSender): WalletResult<WalletAuthData> {
+        return try {
+            val timestamp = System.currentTimeMillis()
+            val loginMessage = "Sign in to Convenu with this wallet. Timestamp: $timestamp"
+
+            val result = mwa.transact(sender) { authResult ->
+                val pubkey = authResult.accounts.first().publicKey
+                val signResult = signMessagesDetached(
+                    messages = arrayOf(loginMessage.toByteArray()),
+                    addresses = arrayOf(pubkey),
+                )
+                Pair(pubkey, signResult.messages.first().signatures.first())
+            }
+
+            when (result) {
+                is TransactionResult.Success -> {
+                    val (pubkeyBytes, signatureBytes) = result.successPayload
+                    val walletAddress = Base58.encode(pubkeyBytes)
+                    val signatureBase58 = Base58.encode(signatureBytes)
+
+                    // Also save as current connection
+                    val authToken = result.authResult.authToken
+                    if (authToken != null) {
+                        currentConnection = WalletConnection(
+                            publicKey = pubkeyBytes,
+                            publicKeyBase58 = walletAddress,
+                            authToken = authToken,
+                        )
+                    }
+
+                    WalletResult.Success(
+                        WalletAuthData(
+                            walletAddress = walletAddress,
+                            message = loginMessage,
+                            signatureBase58 = signatureBase58,
+                        ),
+                    )
+                }
+
+                is TransactionResult.NoWalletFound -> {
+                    Timber.w("No MWA wallet found")
+                    WalletResult.NoWallet
+                }
+
+                is TransactionResult.Failure -> {
+                    Timber.e("MWA authorizeAndSign failed: ${result.message}")
+                    WalletResult.Error(result.message)
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "MWA authorizeAndSign exception")
+            WalletResult.Error(e.message ?: "Wallet login failed")
+        }
+    }
+
     suspend fun signMessage(
         sender: ActivityResultSender,
         message: ByteArray,
@@ -102,7 +168,7 @@ class MwaWalletManager @Inject constructor() {
 
             when (result) {
                 is TransactionResult.Success -> {
-                    val signResult = result.payload
+                    val signResult = result.successPayload
                     if (signResult.messages.isNotEmpty() && signResult.messages[0].signatures.isNotEmpty()) {
                         WalletResult.Success(signResult.messages[0].signatures[0])
                     } else {
@@ -131,12 +197,13 @@ class MwaWalletManager @Inject constructor() {
 
         return try {
             val result = mwa.transact(sender) { _ ->
+                @Suppress("DEPRECATION")
                 signTransactions(transactions = transactions)
             }
 
             when (result) {
                 is TransactionResult.Success -> {
-                    WalletResult.Success(result.payload.signedPayloads)
+                    WalletResult.Success(result.successPayload.signedPayloads)
                 }
 
                 is TransactionResult.NoWalletFound -> WalletResult.NoWallet

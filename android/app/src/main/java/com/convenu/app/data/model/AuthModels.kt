@@ -50,3 +50,27 @@ data class SupabaseUser(
     val id: String,
     val email: String? = null,
 )
+
+// --- Google Auth (direct Supabase ID token grant) ---
+
+@Serializable
+data class GoogleIdTokenRequest(
+    val provider: String = "google",
+    @SerialName("id_token") val idToken: String,
+)
+
+// --- Wallet Auth (server-side signature verification) ---
+
+@Serializable
+data class WalletAuthRequest(
+    @SerialName("wallet_address") val walletAddress: String,
+    val signature: String,
+    val message: String,
+)
+
+@Serializable
+data class WalletAuthResponse(
+    @SerialName("token_hash") val tokenHash: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("new_account") val newAccount: Boolean = false,
+)

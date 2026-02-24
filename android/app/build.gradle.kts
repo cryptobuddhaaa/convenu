@@ -23,6 +23,7 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"sb_publishable_vtqiUCdcXZf8j1cVs960rA_sjo2i5Uk\"")
         buildConfigField("String", "SOLANA_NETWORK", "\"devnet\"")
         buildConfigField("String", "SOLANA_RPC_URL", "\"https://api.devnet.solana.com\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"\"") // Set your Google OAuth Web Client ID
     }
 
     buildTypes {
@@ -92,6 +93,11 @@ dependencies {
 
     // Solana Mobile (web3-solana is a transitive dep of the MWA clientlib)
     implementation(libs.solana.mobile.wallet.adapter.clientlib)
+
+    // Google Sign-In (Credential Manager)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.google.id)
 
     // Image loading
     implementation(libs.coil.compose)
