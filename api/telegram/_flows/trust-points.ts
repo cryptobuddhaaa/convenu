@@ -93,11 +93,11 @@ export async function handleTrust(chatId: number, telegramUserId: number) {
       `${check(trust.wallet_tx_count != null && trust.wallet_tx_count > 10)} Txs > 10 (+5)\n` +
       `${check(trust.wallet_has_tokens)} Holds tokens (+5)\n\n` +
       `<b>Social signals:</b>\n` +
-      `${check(trust.telegram_premium)} Telegram Premium (+8)\n` +
-      `${check(trust.has_username)} Username (+3)\n` +
-      `${check(trust.telegram_account_age_days != null && trust.telegram_account_age_days > 365)} Account Age > 1yr (+3)\n` +
-      `${check(trust.x_verified)} Verified X account (+3)\n` +
-      `${check(trust.x_premium)} X Premium (+3)\n\n` +
+      `${check(trust.telegram_premium)} Telegram Premium (+4)\n` +
+      `${check(trust.has_username)} Username (+4)\n` +
+      `${check(trust.telegram_account_age_days != null && trust.telegram_account_age_days > 365)} Account Age > 1yr (+4)\n` +
+      `${check(trust.x_verified)} Verified X account (+4)\n` +
+      `${check(trust.x_premium)} X Premium (+4)\n\n` +
       `Total Handshakes: ${trust.total_handshakes}`
   );
 }

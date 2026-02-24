@@ -308,15 +308,15 @@ export default function Dashboard() {
                 </CategorySection>
 
                 <CategorySection title="Socials" score={trustScore.scoreSocials} max={20} color="purple">
-                  <SubSignal label="Telegram Premium" active={trustScore.telegramPremium} points="+8" />
-                  <SubSignal label="Telegram username" active={trustScore.hasUsername} points="+3" />
+                  <SubSignal label="Telegram Premium" active={trustScore.telegramPremium} points="+4" />
+                  <SubSignal label="Telegram username" active={trustScore.hasUsername} points="+4" />
                   <SubSignal
                     label={`Telegram account age > 1yr${trustScore.telegramAccountAgeDays ? ` (${Math.floor(trustScore.telegramAccountAgeDays / 365)}y)` : ''}`}
                     active={!!trustScore.telegramAccountAgeDays && trustScore.telegramAccountAgeDays > 365}
-                    points="+3"
+                    points="+4"
                   />
-                  <SubSignal label="Verified X account" active={trustScore.xVerified} points="+3" />
-                  <SubSignal label="X Premium" active={trustScore.xPremium} points="+3" />
+                  <SubSignal label="Verified X account" active={trustScore.xVerified} points="+4" />
+                  <SubSignal label="X Premium" active={trustScore.xPremium} points="+4" />
                 </CategorySection>
 
                 <CategorySection title="Events" score={trustScore.scoreEvents} max={20} color="amber">

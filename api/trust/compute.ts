@@ -46,13 +46,13 @@ export function computeTrustCategories(signals: {
   if (signals.walletHasTokens) scoreWallet += 5;
   scoreWallet = Math.min(MAX_WALLET, scoreWallet);
 
-  // --- Socials (max 20) ---
+  // --- Socials (max 20): 4 points each, 5 signals ---
   let scoreSocials = 0;
-  if (signals.telegramPremium) scoreSocials += 8;
-  if (signals.hasUsername) scoreSocials += 3;
-  if (signals.telegramAccountAgeDays != null && signals.telegramAccountAgeDays > 365) scoreSocials += 3;
-  if (signals.xVerified) scoreSocials += 3;
-  if (signals.xPremium) scoreSocials += 3;
+  if (signals.telegramPremium) scoreSocials += 4;
+  if (signals.hasUsername) scoreSocials += 4;
+  if (signals.telegramAccountAgeDays != null && signals.telegramAccountAgeDays > 365) scoreSocials += 4;
+  if (signals.xVerified) scoreSocials += 4;
+  if (signals.xPremium) scoreSocials += 4;
   scoreSocials = Math.min(MAX_SOCIALS, scoreSocials);
 
   // --- Events (max 20): TBD — placeholder, always 0 for now ---
