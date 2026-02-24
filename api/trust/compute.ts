@@ -184,14 +184,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               .eq('user_id', userId);
           }
           // Use the new access token to check premium status
+          // Use verified_type instead of legacy verified field — verified_type === 'blue' is X Premium only
           if (refreshData.access_token) {
             try {
-              const userRes = await fetch('https://api.x.com/2/users/me?user.fields=verified', {
+              const userRes = await fetch('https://api.x.com/2/users/me?user.fields=verified_type', {
                 headers: { Authorization: `Bearer ${refreshData.access_token}` },
               });
               if (userRes.ok) {
-                const userData = await userRes.json() as { data?: { verified?: boolean } };
-                xPremium = userData.data?.verified || false;
+                const userData = await userRes.json() as { data?: { verified_type?: string } };
+                xPremium = userData.data?.verified_type === 'blue';
               }
             } catch {
               // Non-fatal — keep existing xPremium value

@@ -156,7 +156,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const refreshToken = tokenData.refresh_token || null;
 
       // Fetch X user info (including premium/verified status)
-      const userRes = await fetch('https://api.x.com/2/users/me?user.fields=verified', {
+      // Use verified_type instead of legacy verified field — verified returns true
+      // for any blue checkmark (legacy, org, premium), verified_type === 'blue' is X Premium only
+      const userRes = await fetch('https://api.x.com/2/users/me?user.fields=verified_type', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
@@ -165,10 +167,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.redirect(302, `${WEBAPP_URL}/profile?x_error=user_fetch`);
       }
 
-      const userData = await userRes.json() as { data?: { id?: string; username?: string; verified?: boolean } };
+      const userData = await userRes.json() as { data?: { id?: string; username?: string; verified_type?: string } };
       const xUserId = userData.data?.id;
       const xUsername = userData.data?.username;
-      const xPremium = userData.data?.verified || false;
+      const xPremium = userData.data?.verified_type === 'blue';
 
       if (!xUserId) {
         console.error('X user data missing id field');
