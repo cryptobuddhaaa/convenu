@@ -4,6 +4,7 @@ import { supabase, WEBAPP_URL } from '../_lib/config.js';
 import { sendMessage, hasProfilePhoto } from '../_lib/telegram.js';
 import { getLinkedUserId } from '../_lib/state.js';
 import { estimateTelegramAccountAgeDays } from '../../_lib/telegram-age.js';
+import { computeTrustCategories } from '../../trust/compute.js';
 
 export async function handleStart(
   chatId: number,
@@ -154,33 +155,23 @@ export async function handleStart(
     const totalHandshakes = existing?.total_handshakes || 0;
     const accountAgeDays = existing?.telegram_account_age_days
       ?? estimateTelegramAccountAgeDays(telegramUserId);
-    const walletAgeDays = existing?.wallet_age_days;
-    const walletTxCount = existing?.wallet_tx_count;
+    const walletAgeDays = existing?.wallet_age_days ?? null;
+    const walletTxCount = existing?.wallet_tx_count ?? null;
     const walletHasTokens = existing?.wallet_has_tokens || false;
     const xVerified = existing?.x_verified || false;
 
-    const scoreHandshakes = Math.min(30, totalHandshakes);
-    let scoreWallet = 0;
-    if (walletConnected) scoreWallet += 5;
-    if (walletAgeDays != null && walletAgeDays > 90) scoreWallet += 5;
-    if (walletTxCount != null && walletTxCount > 10) scoreWallet += 5;
-    if (walletHasTokens) scoreWallet += 5;
-    scoreWallet = Math.min(20, scoreWallet);
-    let scoreSocials = 0;
-    if (telegramPremium) scoreSocials += 8;
-    if (userHasPhoto) scoreSocials += 3;
-    if (hasUsername) scoreSocials += 3;
-    if (accountAgeDays != null && accountAgeDays > 365) scoreSocials += 3;
-    if (xVerified) scoreSocials += 3;
-    scoreSocials = Math.min(20, scoreSocials);
-
-    const trustScore = scoreHandshakes + scoreWallet + scoreSocials;
-    let trustLevel: number;
-    if (trustScore >= 60) trustLevel = 5;
-    else if (trustScore >= 40) trustLevel = 4;
-    else if (trustScore >= 25) trustLevel = 3;
-    else if (trustScore >= 10) trustLevel = 2;
-    else trustLevel = 1;
+    const scores = computeTrustCategories({
+      totalHandshakes,
+      walletConnected,
+      walletAgeDays,
+      walletTxCount,
+      walletHasTokens,
+      telegramPremium,
+      hasProfilePhoto: userHasPhoto,
+      hasUsername,
+      telegramAccountAgeDays: accountAgeDays,
+      xVerified,
+    });
 
     await supabase.from('trust_scores').upsert(
       {
@@ -195,13 +186,13 @@ export async function handleStart(
         wallet_has_tokens: walletHasTokens,
         x_verified: xVerified,
         total_handshakes: totalHandshakes,
-        trust_score: trustScore,
-        score_handshakes: scoreHandshakes,
-        score_wallet: scoreWallet,
-        score_socials: scoreSocials,
-        score_events: 0,
-        score_community: 0,
-        trust_level: trustLevel,
+        trust_score: scores.trustScore,
+        score_handshakes: scores.scoreHandshakes,
+        score_wallet: scores.scoreWallet,
+        score_socials: scores.scoreSocials,
+        score_events: scores.scoreEvents,
+        score_community: scores.scoreCommunity,
+        trust_level: scores.trustLevel,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' }
