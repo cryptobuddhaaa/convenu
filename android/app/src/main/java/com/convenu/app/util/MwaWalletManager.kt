@@ -5,6 +5,9 @@ import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 import com.solana.mobilewalletadapter.clientlib.ConnectionIdentity
 import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
 import com.solana.mobilewalletadapter.clientlib.TransactionResult
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -95,57 +98,83 @@ class MwaWalletManager @Inject constructor() {
     /**
      * Authorize AND sign a login message in a single wallet interaction.
      * Returns everything needed to authenticate with the server.
+     *
+     * Uses NonCancellable to prevent the outer coroutine scope from cancelling the
+     * MWA session during wallet user interaction (fixes "Local association was
+     * cancelled before connected" on Seeker/SeedVault devices).
+     * Retries once on cancellation as a fallback.
      */
     suspend fun authorizeAndSign(sender: ActivityResultSender): WalletResult<WalletAuthData> {
-        return try {
-            val timestamp = System.currentTimeMillis()
-            val loginMessage = "Sign in to Convenu with this wallet. Timestamp: $timestamp"
+        val timestamp = System.currentTimeMillis()
+        val loginMessage = "Sign in to Convenu with this wallet. Timestamp: $timestamp"
 
-            val result = mwa.transact(sender) { authResult ->
-                val pubkey = authResult.accounts.first().publicKey
-                val signResult = signMessagesDetached(
-                    messages = arrayOf(loginMessage.toByteArray()),
-                    addresses = arrayOf(pubkey),
-                )
-                Pair(pubkey, signResult.messages.first().signatures.first())
+        for (attempt in 1..MAX_TRANSACT_ATTEMPTS) {
+            try {
+                val result = withContext(NonCancellable) {
+                    mwa.transact(sender) { authResult ->
+                        val pubkey = authResult.accounts.first().publicKey
+                        val signResult = signMessagesDetached(
+                            messages = arrayOf(loginMessage.toByteArray()),
+                            addresses = arrayOf(pubkey),
+                        )
+                        Pair(pubkey, signResult.messages.first().signatures.first())
+                    }
+                }
+
+                when (result) {
+                    is TransactionResult.Success -> {
+                        val (pubkeyBytes, signatureBytes) = result.payload
+                        val walletAddress = Base58.encode(pubkeyBytes)
+                        val signatureBase58 = Base58.encode(signatureBytes)
+
+                        currentConnection = WalletConnection(
+                            publicKey = pubkeyBytes,
+                            publicKeyBase58 = walletAddress,
+                            authToken = result.authResult.authToken,
+                        )
+
+                        return WalletResult.Success(
+                            WalletAuthData(
+                                walletAddress = walletAddress,
+                                message = loginMessage,
+                                signatureBase58 = signatureBase58,
+                            ),
+                        )
+                    }
+
+                    is TransactionResult.NoWalletFound -> {
+                        Timber.w("No MWA wallet found")
+                        return WalletResult.NoWallet
+                    }
+
+                    is TransactionResult.Failure -> {
+                        if (attempt < MAX_TRANSACT_ATTEMPTS &&
+                            "cancelled" in result.message.lowercase()
+                        ) {
+                            Timber.w("MWA attempt $attempt cancelled, retrying...")
+                            delay(RETRY_DELAY_MS)
+                            continue
+                        }
+                        Timber.e("MWA authorizeAndSign failed: ${result.message}")
+                        return WalletResult.Error(
+                            "Wallet connection interrupted. Please try again.",
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                if (attempt < MAX_TRANSACT_ATTEMPTS &&
+                    e.message?.contains("cancelled", ignoreCase = true) == true
+                ) {
+                    Timber.w(e, "MWA attempt $attempt exception, retrying...")
+                    delay(RETRY_DELAY_MS)
+                    continue
+                }
+                Timber.e(e, "MWA authorizeAndSign exception")
+                return WalletResult.Error(e.message ?: "Wallet login failed")
             }
-
-            when (result) {
-                is TransactionResult.Success -> {
-                    val (pubkeyBytes, signatureBytes) = result.payload
-                    val walletAddress = Base58.encode(pubkeyBytes)
-                    val signatureBase58 = Base58.encode(signatureBytes)
-
-                    // Also save as current connection
-                    currentConnection = WalletConnection(
-                        publicKey = pubkeyBytes,
-                        publicKeyBase58 = walletAddress,
-                        authToken = result.authResult.authToken,
-                    )
-
-                    WalletResult.Success(
-                        WalletAuthData(
-                            walletAddress = walletAddress,
-                            message = loginMessage,
-                            signatureBase58 = signatureBase58,
-                        ),
-                    )
-                }
-
-                is TransactionResult.NoWalletFound -> {
-                    Timber.w("No MWA wallet found")
-                    WalletResult.NoWallet
-                }
-
-                is TransactionResult.Failure -> {
-                    Timber.e("MWA authorizeAndSign failed: ${result.message}")
-                    WalletResult.Error(result.message)
-                }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "MWA authorizeAndSign exception")
-            WalletResult.Error(e.message ?: "Wallet login failed")
         }
+
+        return WalletResult.Error("Wallet connection failed. Please try again.")
     }
 
     suspend fun signMessage(
@@ -217,5 +246,10 @@ class MwaWalletManager @Inject constructor() {
 
     fun disconnect() {
         currentConnection = null
+    }
+
+    companion object {
+        private const val MAX_TRANSACT_ATTEMPTS = 2
+        private const val RETRY_DELAY_MS = 1000L
     }
 }
