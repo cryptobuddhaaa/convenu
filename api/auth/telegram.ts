@@ -208,12 +208,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     {
       const { data: existing } = await supabase
         .from('trust_scores')
-        .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified')
+        .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified, has_profile_photo')
         .eq('user_id', userId)
         .single();
 
       const telegramPremium = tgUser.is_premium || false;
-      const userHasPhoto = !!tgUser.photo_url || await hasProfilePhoto(telegramUserId);
+      const photoCheck = await hasProfilePhoto(telegramUserId);
+      const userHasPhoto = !!tgUser.photo_url || photoCheck === true || (photoCheck === null && (existing?.has_profile_photo || false));
       const hasUsername = !!tgUser.username;
       const walletConnected = existing?.wallet_connected || false;
       const totalHandshakes = existing?.total_handshakes || 0;

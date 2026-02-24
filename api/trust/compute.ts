@@ -16,6 +16,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
+const X_CLIENT_ID = process.env.X_CLIENT_ID || '';
+const X_CLIENT_SECRET = process.env.X_CLIENT_SECRET || '';
+
 /** Scoring constants */
 const MAX_HANDSHAKES = 30;
 const MAX_WALLET = 20;
@@ -149,7 +152,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Freshly check profile photo via Bot API (the User object doesn't include this field)
     let userHasPhoto = existing?.has_profile_photo || false;
     if (tgLink?.telegram_user_id) {
-      userHasPhoto = await hasProfilePhoto(tgLink.telegram_user_id);
+      const photoResult = await hasProfilePhoto(tgLink.telegram_user_id);
+      if (photoResult !== null) {
+        userHasPhoto = photoResult;
+      }
+      // If null (API error), keep the existing stored value
     }
 
     // Count completed handshakes
@@ -160,6 +167,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .or(`initiator_user_id.eq.${userId},receiver_user_id.eq.${userId}`);
 
     const totalHandshakes = handshakeCount || 0;
+
+    // Re-verify X connection if we have a stored refresh token
+    let xVerified = existing?.x_verified || false;
+    if (xVerified && existing?.x_refresh_token && X_CLIENT_ID && X_CLIENT_SECRET) {
+      try {
+        const refreshRes = await fetch('https://api.x.com/2/oauth2/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: `Basic ${Buffer.from(`${X_CLIENT_ID}:${X_CLIENT_SECRET}`).toString('base64')}`,
+          },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: existing.x_refresh_token as string,
+          }),
+        });
+
+        if (refreshRes.ok) {
+          // Token refreshed — connection still active; store new refresh token
+          const refreshData = await refreshRes.json() as { refresh_token?: string };
+          if (refreshData.refresh_token) {
+            await supabase
+              .from('trust_scores')
+              .update({ x_refresh_token: refreshData.refresh_token })
+              .eq('user_id', userId);
+          }
+        } else {
+          // Token refresh failed — user likely revoked the app on X
+          console.log(`X token refresh failed for user ${userId}, marking x_verified=false`);
+          xVerified = false;
+          await supabase
+            .from('trust_scores')
+            .update({ x_refresh_token: null })
+            .eq('user_id', userId);
+        }
+      } catch (err) {
+        // Network error — keep existing value (don't penalize for transient failures)
+        console.error('X re-verification network error:', err);
+      }
+    }
 
     // Gather all signals
     const signals = {
@@ -172,7 +219,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       hasProfilePhoto: userHasPhoto,
       hasUsername: existing?.has_username || false,
       telegramAccountAgeDays,
-      xVerified: existing?.x_verified || false,
+      xVerified,
     };
 
     const scores = computeTrustCategories(signals);

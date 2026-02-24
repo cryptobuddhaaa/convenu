@@ -100,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       response_type: 'code',
       client_id: X_CLIENT_ID,
       redirect_uri: X_CALLBACK_URL,
-      scope: 'tweet.read users.read',
+      scope: 'tweet.read users.read offline.access',
       state,
       code_challenge: challenge,
       code_challenge_method: 'S256',
@@ -150,8 +150,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.redirect(302, `${WEBAPP_URL}/profile?x_error=token_exchange`);
       }
 
-      const tokenData = await tokenRes.json() as { access_token: string };
+      const tokenData = await tokenRes.json() as { access_token: string; refresh_token?: string };
       const accessToken = tokenData.access_token;
+      const refreshToken = tokenData.refresh_token || null;
 
       // Fetch X user info
       const userRes = await fetch('https://api.x.com/2/users/me', {
@@ -168,13 +169,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const userId = payload.userId as string;
 
-      // Set x_verified = true in trust_scores
+      // Set x_verified = true and store refresh token for re-verification
       await supabase
         .from('trust_scores')
         .upsert(
           {
             user_id: userId,
             x_verified: true,
+            x_refresh_token: refreshToken,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id' }
@@ -199,6 +201,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('X OAuth error:', err);
       return res.redirect(302, `${WEBAPP_URL}/profile?x_error=server`);
     }
+  }
+
+  // ---- DELETE: Disconnect X account ----
+  if (req.method === 'DELETE') {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+
+    // Revoke the token at X if we have a refresh token
+    const { data: trustData } = await supabase
+      .from('trust_scores')
+      .select('x_refresh_token')
+      .eq('user_id', authUser.id)
+      .single();
+
+    if (trustData?.x_refresh_token && X_CLIENT_ID && X_CLIENT_SECRET) {
+      // Best-effort revocation — don't fail if X is unreachable
+      try {
+        await fetch('https://api.x.com/2/oauth2/revoke', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: `Basic ${Buffer.from(`${X_CLIENT_ID}:${X_CLIENT_SECRET}`).toString('base64')}`,
+          },
+          body: new URLSearchParams({
+            token: trustData.x_refresh_token,
+            token_type_hint: 'refresh_token',
+          }),
+        });
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    // Clear x_verified and refresh token
+    await supabase
+      .from('trust_scores')
+      .update({
+        x_verified: false,
+        x_refresh_token: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', authUser.id);
+
+    // Clear twitter_handle from profile
+    await supabase
+      .from('user_profiles')
+      .update({
+        twitter_handle: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', authUser.id);
+
+    return res.status(200).json({ disconnected: true });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });

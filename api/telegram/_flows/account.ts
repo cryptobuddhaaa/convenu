@@ -144,12 +144,13 @@ export async function handleStart(
   if (telegramUser) {
     const { data: existing } = await supabase
       .from('trust_scores')
-      .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified')
+      .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified, has_profile_photo')
       .eq('user_id', linkCode.user_id)
       .single();
 
     const telegramPremium = telegramUser.is_premium || false;
-    const userHasPhoto = await hasProfilePhoto(telegramUserId);
+    const photoCheck = await hasProfilePhoto(telegramUserId);
+    const userHasPhoto = photoCheck === true || (photoCheck === null && (existing?.has_profile_photo || false));
     const hasUsername = !!telegramUsername;
     const walletConnected = existing?.wallet_connected || false;
     const totalHandshakes = existing?.total_handshakes || 0;

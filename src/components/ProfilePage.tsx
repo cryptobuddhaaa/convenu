@@ -41,6 +41,7 @@ export default function ProfilePage() {
   const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [xVerified, setXVerified] = useState(false);
   const [xConnecting, setXConnecting] = useState(false);
+  const [xDisconnecting, setXDisconnecting] = useState(false);
 
   const wallet = getPrimaryWallet();
 
@@ -170,6 +171,25 @@ export default function ProfilePage() {
     }
   };
 
+  const handleDisconnectX = async () => {
+    setXDisconnecting(true);
+    try {
+      const res = await authFetch('/api/auth/x', { method: 'DELETE' });
+      if (res.ok) {
+        setXVerified(false);
+        setProfile((prev) => ({ ...prev, twitter_handle: '' }));
+        toast.success('X account disconnected');
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to disconnect X');
+      }
+    } catch {
+      toast.error('Failed to disconnect X');
+    } finally {
+      setXDisconnecting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -210,9 +230,18 @@ export default function ProfilePage() {
               <span className="text-sm text-slate-300">X / Twitter</span>
             </div>
             {xVerified ? (
-              <span className="text-sm font-mono text-slate-200">
-                {profile.twitter_handle || 'Verified'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-mono text-slate-200">
+                  {profile.twitter_handle || 'Verified'}
+                </span>
+                <button
+                  onClick={handleDisconnectX}
+                  disabled={xDisconnecting}
+                  className="px-2 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
+                >
+                  {xDisconnecting ? '...' : 'Disconnect'}
+                </button>
+              </div>
             ) : (
               <button
                 onClick={handleConnectX}

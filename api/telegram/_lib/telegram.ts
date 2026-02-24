@@ -32,9 +32,11 @@ export async function sendMessage(
 /**
  * Check if a Telegram user has at least one profile photo.
  * Uses getUserProfilePhotos with limit=1 for minimal data transfer.
+ * Returns true/false for definitive results, or null if the check failed
+ * (so callers can fall back to the previously stored value).
  */
-export async function hasProfilePhoto(userId: number): Promise<boolean> {
-  if (!BOT_TOKEN) return false;
+export async function hasProfilePhoto(userId: number): Promise<boolean | null> {
+  if (!BOT_TOKEN) return null;
 
   try {
     const response = await fetch(`${TELEGRAM_API}/getUserProfilePhotos`, {
@@ -43,12 +45,17 @@ export async function hasProfilePhoto(userId: number): Promise<boolean> {
       body: JSON.stringify({ user_id: userId, limit: 1 }),
     });
 
-    if (!response.ok) return false;
+    if (!response.ok) {
+      console.error(`[Telegram] getUserProfilePhotos failed: ${response.status}`);
+      return null;
+    }
 
     const data = await response.json() as { ok: boolean; result?: { total_count: number } };
-    return data.ok && (data.result?.total_count ?? 0) > 0;
-  } catch {
-    return false;
+    if (!data.ok) return null;
+    return (data.result?.total_count ?? 0) > 0;
+  } catch (err) {
+    console.error('[Telegram] getUserProfilePhotos error:', err);
+    return null;
   }
 }
 
