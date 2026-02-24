@@ -3,12 +3,16 @@
  * Reads/writes to /api/profile and displays linked accounts (Google, Telegram, Wallet).
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useUserWallet } from '../hooks/useUserWallet';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { authFetch } from '../lib/authFetch';
 import { supabase } from '../lib/supabase';
 import { toast } from './Toast';
+import { isTelegramWebApp, openTelegramLink } from '../lib/telegram';
+import { generateTelegramLinkCode, unlinkTelegram } from '../services/telegramService';
 
 interface ProfileData {
   first_name: string;
@@ -42,8 +46,14 @@ export default function ProfilePage() {
   const [xVerified, setXVerified] = useState(false);
   const [xConnecting, setXConnecting] = useState(false);
   const [xDisconnecting, setXDisconnecting] = useState(false);
+  const [tgLinking, setTgLinking] = useState(false);
+  const [walletLinking, setWalletLinking] = useState(false);
+  const [walletLoginUrl, setWalletLoginUrl] = useState<string | null>(null);
+  const walletUrlRef = useRef<HTMLInputElement>(null);
+  const { connected: walletAdapterConnected } = useWallet();
 
   const wallet = getPrimaryWallet();
+  const isMobileOrTelegram = isTelegramWebApp() || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
   useEffect(() => {
     if (!user) return;
@@ -191,6 +201,51 @@ export default function ProfilePage() {
     }
   };
 
+  const handleLinkTelegram = async () => {
+    setTgLinking(true);
+    try {
+      const { deepLink } = await generateTelegramLinkCode();
+      openTelegramLink(deepLink);
+      toast.info('Complete linking in Telegram, then refresh this page.');
+    } catch {
+      toast.error('Failed to generate link code.');
+    } finally {
+      setTgLinking(false);
+    }
+  };
+
+  const handleUnlinkTelegram = async () => {
+    try {
+      await unlinkTelegram();
+      setTelegramUsername(null);
+      toast.info('Telegram unlinked.');
+    } catch {
+      toast.error('Failed to unlink Telegram.');
+    }
+  };
+
+  const handleConnectWallet = async () => {
+    setWalletLinking(true);
+    try {
+      const response = await authFetch('/api/auth/wallet-login', { method: 'POST' });
+      if (!response.ok) throw new Error('Failed to generate login link');
+      const { url } = await response.json();
+
+      // Try clipboard first
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Link copied! Paste it in your wallet browser (e.g. Phantom).');
+      } catch {
+        // Fallback: show the URL for manual copy
+        setWalletLoginUrl(url);
+      }
+    } catch {
+      toast.error('Failed to generate wallet login link.');
+    } finally {
+      setWalletLinking(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -215,16 +270,90 @@ export default function ProfilePage() {
             value={user?.app_metadata?.provider === 'google' ? (user.email || 'Connected') : 'Not linked'}
             connected={user?.app_metadata?.provider === 'google'}
           />
-          <AccountRow
-            label="Telegram"
-            value={telegramUsername ? `@${telegramUsername}` : 'Not linked'}
-            connected={!!telegramUsername}
-          />
-          <AccountRow
-            label="Wallet"
-            value={wallet ? `${wallet.walletAddress.slice(0, 4)}...${wallet.walletAddress.slice(-4)}` : 'Not linked'}
-            connected={!!wallet}
-          />
+          {/* Telegram */}
+          <div className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-3">
+              <div className={`w-2 h-2 rounded-full ${telegramUsername ? 'bg-green-400' : 'bg-slate-600'}`} />
+              <span className="text-sm text-slate-300">Telegram</span>
+            </div>
+            {telegramUsername ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-mono text-slate-200">@{telegramUsername}</span>
+                <button
+                  onClick={handleUnlinkTelegram}
+                  className="px-2 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors"
+                >
+                  Unlink
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleLinkTelegram}
+                disabled={tgLinking}
+                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                {tgLinking ? 'Generating...' : 'Link'}
+              </button>
+            )}
+          </div>
+          {/* Wallet */}
+          <div className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-3">
+              <div className={`w-2 h-2 rounded-full ${wallet ? 'bg-green-400' : 'bg-slate-600'}`} />
+              <span className="text-sm text-slate-300">Wallet</span>
+            </div>
+            {wallet ? (
+              <span className="text-sm font-mono text-slate-200">
+                {wallet.walletAddress.slice(0, 4)}...{wallet.walletAddress.slice(-4)}
+              </span>
+            ) : isMobileOrTelegram ? (
+              <div className="flex flex-col items-end gap-1">
+                {walletLoginUrl ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      ref={walletUrlRef}
+                      type="text"
+                      readOnly
+                      value={walletLoginUrl}
+                      onFocus={(e) => e.target.select()}
+                      className="w-40 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-[10px] text-white font-mono select-all"
+                      style={{ userSelect: 'all', WebkitUserSelect: 'all' } as React.CSSProperties}
+                    />
+                    <button
+                      onClick={() => setWalletLoginUrl(null)}
+                      className="px-1 py-1 text-xs text-slate-400 hover:text-white"
+                      aria-label="Close"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleConnectWallet}
+                    disabled={walletLinking}
+                    className="px-3 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                  >
+                    {walletLinking ? 'Generating...' : 'Connect'}
+                  </button>
+                )}
+                <span className="text-[10px] text-slate-500">
+                  Copy link &amp; paste in wallet browser
+                </span>
+              </div>
+            ) : walletAdapterConnected ? (
+              <span className="text-sm text-slate-400">Verifying...</span>
+            ) : (
+              <WalletMultiButton
+                style={{
+                  backgroundColor: 'rgb(51, 65, 85)',
+                  height: '28px',
+                  fontSize: '12px',
+                  padding: '0 12px',
+                  borderRadius: '8px',
+                }}
+              />
+            )}
+          </div>
           <div className="flex items-center justify-between py-2">
             <div className="flex items-center gap-3">
               <div className={`w-2 h-2 rounded-full ${xVerified ? 'bg-green-400' : 'bg-slate-600'}`} />
