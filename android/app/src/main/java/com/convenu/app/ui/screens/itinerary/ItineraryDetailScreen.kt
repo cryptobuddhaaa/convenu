@@ -404,7 +404,7 @@ fun EventFormDialog(
                         readOnly = true,
                         label = { Text("Event Type") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.Field),
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
                     )
                     ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         eventTypes.forEach { type ->
