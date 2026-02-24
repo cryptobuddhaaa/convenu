@@ -12,6 +12,8 @@ import com.convenu.app.data.model.PendingHandshakesResponse
 import com.convenu.app.data.model.TelegramAuthRequest
 import com.convenu.app.data.model.TelegramAuthResponse
 import com.convenu.app.data.model.TrustComputeResponse
+import com.convenu.app.data.model.WalletAuthRequest
+import com.convenu.app.data.model.WalletAuthResponse
 import com.convenu.app.data.model.WalletVerifyRequest
 import com.convenu.app.data.model.WalletVerifyResponse
 import retrofit2.Response
@@ -28,6 +30,12 @@ interface ConvenuApi {
     suspend fun authTelegram(
         @Body request: TelegramAuthRequest,
     ): Response<TelegramAuthResponse>
+
+    @POST("wallet/verify")
+    suspend fun authWallet(
+        @Query("action") action: String = "auth",
+        @Body request: WalletAuthRequest,
+    ): Response<WalletAuthResponse>
 
     // --- Wallet ---
 

@@ -16,7 +16,10 @@ class AuthInterceptor @Inject constructor(
 
         // Skip auth for public endpoints
         val path = originalRequest.url.encodedPath
-        if (path.contains("auth/telegram")) {
+        val query = originalRequest.url.encodedQuery ?: ""
+        if (path.contains("auth/telegram") ||
+            (path.contains("wallet/verify") && query.contains("action=auth"))
+        ) {
             return chain.proceed(originalRequest)
         }
 
