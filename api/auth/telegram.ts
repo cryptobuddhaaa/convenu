@@ -10,7 +10,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { estimateTelegramAccountAgeDays } from '../_lib/telegram-age.js';
-import { hasProfilePhoto } from '../telegram/_lib/telegram.js';
 import { computeTrustCategories } from '../trust/compute.js';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
@@ -208,13 +207,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     {
       const { data: existing } = await supabase
         .from('trust_scores')
-        .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified, has_profile_photo')
+        .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified, x_premium')
         .eq('user_id', userId)
         .single();
 
       const telegramPremium = tgUser.is_premium || false;
-      const photoCheck = await hasProfilePhoto(telegramUserId);
-      const userHasPhoto = !!tgUser.photo_url || photoCheck === true || (photoCheck === null && (existing?.has_profile_photo || false));
       const hasUsername = !!tgUser.username;
       const walletConnected = existing?.wallet_connected || false;
       const totalHandshakes = existing?.total_handshakes || 0;
@@ -224,6 +221,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const walletTxCount = existing?.wallet_tx_count ?? null;
       const walletHasTokens = existing?.wallet_has_tokens || false;
       const xVerified = existing?.x_verified || false;
+      const xPremium = existing?.x_premium || false;
 
       const scores = computeTrustCategories({
         totalHandshakes,
@@ -232,17 +230,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         walletTxCount,
         walletHasTokens,
         telegramPremium,
-        hasProfilePhoto: userHasPhoto,
         hasUsername,
         telegramAccountAgeDays: accountAgeDays,
         xVerified,
+        xPremium,
       });
 
       await supabase.from('trust_scores').upsert(
         {
           user_id: userId,
           telegram_premium: telegramPremium,
-          has_profile_photo: userHasPhoto,
           has_username: hasUsername,
           telegram_account_age_days: accountAgeDays,
           wallet_connected: walletConnected,
@@ -250,6 +247,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           wallet_tx_count: walletTxCount,
           wallet_has_tokens: walletHasTokens,
           x_verified: xVerified,
+          x_premium: xPremium,
           total_handshakes: totalHandshakes,
           trust_score: scores.trustScore,
           score_handshakes: scores.scoreHandshakes,

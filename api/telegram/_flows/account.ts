@@ -1,7 +1,7 @@
 // /start command handler — account linking & welcome
 
 import { supabase, WEBAPP_URL } from '../_lib/config.js';
-import { sendMessage, hasProfilePhoto } from '../_lib/telegram.js';
+import { sendMessage } from '../_lib/telegram.js';
 import { getLinkedUserId } from '../_lib/state.js';
 import { estimateTelegramAccountAgeDays } from '../../_lib/telegram-age.js';
 import { computeTrustCategories } from '../../trust/compute.js';
@@ -144,13 +144,11 @@ export async function handleStart(
   if (telegramUser) {
     const { data: existing } = await supabase
       .from('trust_scores')
-      .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified, has_profile_photo')
+      .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified, x_premium')
       .eq('user_id', linkCode.user_id)
       .single();
 
     const telegramPremium = telegramUser.is_premium || false;
-    const photoCheck = await hasProfilePhoto(telegramUserId);
-    const userHasPhoto = photoCheck === true || (photoCheck === null && (existing?.has_profile_photo || false));
     const hasUsername = !!telegramUsername;
     const walletConnected = existing?.wallet_connected || false;
     const totalHandshakes = existing?.total_handshakes || 0;
@@ -160,6 +158,7 @@ export async function handleStart(
     const walletTxCount = existing?.wallet_tx_count ?? null;
     const walletHasTokens = existing?.wallet_has_tokens || false;
     const xVerified = existing?.x_verified || false;
+    const xPremium = existing?.x_premium || false;
 
     const scores = computeTrustCategories({
       totalHandshakes,
@@ -168,17 +167,16 @@ export async function handleStart(
       walletTxCount,
       walletHasTokens,
       telegramPremium,
-      hasProfilePhoto: userHasPhoto,
       hasUsername,
       telegramAccountAgeDays: accountAgeDays,
       xVerified,
+      xPremium,
     });
 
     await supabase.from('trust_scores').upsert(
       {
         user_id: linkCode.user_id,
         telegram_premium: telegramPremium,
-        has_profile_photo: userHasPhoto,
         has_username: hasUsername,
         telegram_account_age_days: accountAgeDays,
         wallet_connected: walletConnected,
@@ -186,6 +184,7 @@ export async function handleStart(
         wallet_tx_count: walletTxCount,
         wallet_has_tokens: walletHasTokens,
         x_verified: xVerified,
+        x_premium: xPremium,
         total_handshakes: totalHandshakes,
         trust_score: scores.trustScore,
         score_handshakes: scores.scoreHandshakes,

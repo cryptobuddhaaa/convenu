@@ -38,7 +38,6 @@ function mapRowToTrust(row: Record<string, unknown>): TrustScore {
     scoreEvents: (row.score_events as number) || 0,
     scoreCommunity: (row.score_community as number) || 0,
     telegramPremium: row.telegram_premium as boolean,
-    hasProfilePhoto: row.has_profile_photo as boolean,
     hasUsername: row.has_username as boolean,
     telegramAccountAgeDays: row.telegram_account_age_days as number | null,
     walletConnected: row.wallet_connected as boolean,
@@ -46,6 +45,7 @@ function mapRowToTrust(row: Record<string, unknown>): TrustScore {
     walletTxCount: row.wallet_tx_count as number | null,
     walletHasTokens: row.wallet_has_tokens as boolean,
     xVerified: row.x_verified as boolean,
+    xPremium: row.x_premium as boolean,
     totalHandshakes: row.total_handshakes as number,
     trustLevel: row.trust_level as number,
     updatedAt: row.updated_at as string,
@@ -309,7 +309,6 @@ export default function Dashboard() {
 
                 <CategorySection title="Socials" score={trustScore.scoreSocials} max={20} color="purple">
                   <SubSignal label="Telegram Premium" active={trustScore.telegramPremium} points="+8" />
-                  <SubSignal label="Profile photo" active={trustScore.hasProfilePhoto} points="+3" />
                   <SubSignal label="Telegram username" active={trustScore.hasUsername} points="+3" />
                   <SubSignal
                     label={`Telegram account age > 1yr${trustScore.telegramAccountAgeDays ? ` (${Math.floor(trustScore.telegramAccountAgeDays / 365)}y)` : ''}`}
@@ -317,6 +316,7 @@ export default function Dashboard() {
                     points="+3"
                   />
                   <SubSignal label="Verified X account" active={trustScore.xVerified} points="+3" />
+                  <SubSignal label="X Premium" active={trustScore.xPremium} points="+3" />
                 </CategorySection>
 
                 <CategorySection title="Events" score={trustScore.scoreEvents} max={20} color="amber">

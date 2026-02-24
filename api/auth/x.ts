@@ -154,8 +154,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const accessToken = tokenData.access_token;
       const refreshToken = tokenData.refresh_token || null;
 
-      // Fetch X user info
-      const userRes = await fetch('https://api.x.com/2/users/me', {
+      // Fetch X user info (including premium/verified status)
+      const userRes = await fetch('https://api.x.com/2/users/me?user.fields=verified', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
@@ -164,18 +164,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.redirect(302, `${WEBAPP_URL}/profile?x_error=user_fetch`);
       }
 
-      const userData = await userRes.json() as { data?: { username?: string } };
+      const userData = await userRes.json() as { data?: { username?: string; verified?: boolean } };
       const xUsername = userData.data?.username;
+      const xPremium = userData.data?.verified || false;
 
       const userId = payload.userId as string;
 
-      // Set x_verified = true and store refresh token for re-verification
+      // Set x_verified = true, premium status, and store refresh token for re-verification
       await supabase
         .from('trust_scores')
         .upsert(
           {
             user_id: userId,
             x_verified: true,
+            x_premium: xPremium,
             x_refresh_token: refreshToken,
             updated_at: new Date().toISOString(),
           },
@@ -234,11 +236,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Clear x_verified and refresh token
+    // Clear x_verified, x_premium, and refresh token
     await supabase
       .from('trust_scores')
       .update({
         x_verified: false,
+        x_premium: false,
         x_refresh_token: null,
         updated_at: new Date().toISOString(),
       })

@@ -158,7 +158,6 @@ export interface TrustScore {
   scoreEvents: number; // 0-20
   scoreCommunity: number; // 0-10
   telegramPremium: boolean;
-  hasProfilePhoto: boolean;
   hasUsername: boolean;
   telegramAccountAgeDays: number | null;
   walletConnected: boolean;
@@ -166,6 +165,7 @@ export interface TrustScore {
   walletTxCount: number | null;
   walletHasTokens: boolean;
   xVerified: boolean;
+  xPremium: boolean;
   totalHandshakes: number;
   trustLevel: number; // legacy 1-5 (kept for backward compat)
   updatedAt: string;

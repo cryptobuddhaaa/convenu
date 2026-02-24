@@ -9,7 +9,6 @@ import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from '../_lib/auth.js';
 import { enrichWalletData } from '../_lib/wallet-enrich.js';
 import { estimateTelegramAccountAgeDays } from '../_lib/telegram-age.js';
-import { hasProfilePhoto } from '../telegram/_lib/telegram.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -31,10 +30,10 @@ export function computeTrustCategories(signals: {
   walletTxCount: number | null;
   walletHasTokens: boolean;
   telegramPremium: boolean;
-  hasProfilePhoto: boolean;
   hasUsername: boolean;
   telegramAccountAgeDays: number | null;
   xVerified: boolean;
+  xPremium: boolean;
 }) {
   // --- Handshakes (max 30): 1 point per minted handshake ---
   const scoreHandshakes = Math.min(MAX_HANDSHAKES, signals.totalHandshakes);
@@ -50,10 +49,10 @@ export function computeTrustCategories(signals: {
   // --- Socials (max 20) ---
   let scoreSocials = 0;
   if (signals.telegramPremium) scoreSocials += 8;
-  if (signals.hasProfilePhoto) scoreSocials += 3;
   if (signals.hasUsername) scoreSocials += 3;
   if (signals.telegramAccountAgeDays != null && signals.telegramAccountAgeDays > 365) scoreSocials += 3;
   if (signals.xVerified) scoreSocials += 3;
+  if (signals.xPremium) scoreSocials += 3;
   scoreSocials = Math.min(MAX_SOCIALS, scoreSocials);
 
   // --- Events (max 20): TBD — placeholder, always 0 for now ---
@@ -149,16 +148,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       telegramAccountAgeDays = estimateTelegramAccountAgeDays(tgLink.telegram_user_id);
     }
 
-    // Freshly check profile photo via Bot API (the User object doesn't include this field)
-    let userHasPhoto = existing?.has_profile_photo || false;
-    if (tgLink?.telegram_user_id) {
-      const photoResult = await hasProfilePhoto(tgLink.telegram_user_id);
-      if (photoResult !== null) {
-        userHasPhoto = photoResult;
-      }
-      // If null (API error), keep the existing stored value
-    }
-
     // Count completed handshakes
     const { count: handshakeCount } = await supabase
       .from('handshakes')
@@ -168,8 +157,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const totalHandshakes = handshakeCount || 0;
 
-    // Re-verify X connection if we have a stored refresh token
+    // Re-verify X connection and check premium status if we have a stored refresh token
     let xVerified = existing?.x_verified || false;
+    let xPremium = existing?.x_premium || false;
     if (xVerified && existing?.x_refresh_token && X_CLIENT_ID && X_CLIENT_SECRET) {
       try {
         const refreshRes = await fetch('https://api.x.com/2/oauth2/token', {
@@ -185,25 +175,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
 
         if (refreshRes.ok) {
-          // Token refreshed — connection still active; store new refresh token
-          const refreshData = await refreshRes.json() as { refresh_token?: string };
+          const refreshData = await refreshRes.json() as { access_token?: string; refresh_token?: string };
+          // Store rotated refresh token
           if (refreshData.refresh_token) {
             await supabase
               .from('trust_scores')
               .update({ x_refresh_token: refreshData.refresh_token })
               .eq('user_id', userId);
           }
+          // Use the new access token to check premium status
+          if (refreshData.access_token) {
+            try {
+              const userRes = await fetch('https://api.x.com/2/users/me?user.fields=verified', {
+                headers: { Authorization: `Bearer ${refreshData.access_token}` },
+              });
+              if (userRes.ok) {
+                const userData = await userRes.json() as { data?: { verified?: boolean } };
+                xPremium = userData.data?.verified || false;
+              }
+            } catch {
+              // Non-fatal — keep existing xPremium value
+            }
+          }
         } else {
           // Token refresh failed — user likely revoked the app on X
           console.log(`X token refresh failed for user ${userId}, marking x_verified=false`);
           xVerified = false;
+          xPremium = false;
           await supabase
             .from('trust_scores')
             .update({ x_refresh_token: null })
             .eq('user_id', userId);
         }
       } catch (err) {
-        // Network error — keep existing value (don't penalize for transient failures)
+        // Network error — keep existing values (don't penalize for transient failures)
         console.error('X re-verification network error:', err);
       }
     }
@@ -216,10 +221,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       walletTxCount,
       walletHasTokens,
       telegramPremium: existing?.telegram_premium || false,
-      hasProfilePhoto: userHasPhoto,
       hasUsername: existing?.has_username || false,
       telegramAccountAgeDays,
       xVerified,
+      xPremium,
     };
 
     const scores = computeTrustCategories(signals);
@@ -227,7 +232,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const trustData = {
       user_id: userId,
       telegram_premium: signals.telegramPremium,
-      has_profile_photo: signals.hasProfilePhoto,
       has_username: signals.hasUsername,
       telegram_account_age_days: telegramAccountAgeDays,
       wallet_connected: walletConnected,
@@ -235,6 +239,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       wallet_tx_count: walletTxCount,
       wallet_has_tokens: walletHasTokens,
       x_verified: signals.xVerified,
+      x_premium: signals.xPremium,
       total_handshakes: totalHandshakes,
       trust_score: scores.trustScore,
       score_handshakes: scores.scoreHandshakes,
