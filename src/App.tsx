@@ -18,6 +18,7 @@ import { useHandshakes } from './hooks/useHandshakes';
 import { HandshakeClaimPage } from './components/HandshakeClaimPage';
 import Dashboard from './components/Dashboard';
 import ProfilePage from './components/ProfilePage';
+import AdminDashboard from './components/AdminDashboard';
 
 type ActiveTab = 'itinerary' | 'contacts' | 'shared' | 'dashboard' | 'profile';
 
@@ -35,7 +36,15 @@ function App() {
   const [claimHandshakeId, setClaimHandshakeId] = useState<string | null>(null);
   const [viewedSharedItineraries, setViewedSharedItineraries] = useState<Itinerary[]>([]);
   const [selectedSharedItinerary, setSelectedSharedItinerary] = useState<Itinerary | null>(null);
+  const [showAdmin, setShowAdmin] = useState(false);
   const { confirm, dialogProps } = useConfirmDialog();
+
+  // Detect /admin URL path
+  useEffect(() => {
+    if (window.location.pathname === '/admin') {
+      setShowAdmin(true);
+    }
+  }, []);
 
   // Auto-switch to profile tab when redirected from X OAuth callback
   useEffect(() => {
@@ -221,6 +230,18 @@ function App() {
           <p className="mt-4 text-slate-300">Loading...</p>
         </div>
       </div>
+    );
+  }
+
+  // Admin dashboard (requires login — admin check happens inside the component)
+  if (showAdmin && user) {
+    return (
+      <AdminDashboard
+        onExit={() => {
+          setShowAdmin(false);
+          window.history.replaceState({}, '', '/');
+        }}
+      />
     );
   }
 

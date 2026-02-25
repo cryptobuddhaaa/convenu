@@ -1,11 +1,14 @@
 /**
- * GET/PUT /api/profile
+ * GET/PUT /api/profile?action=...
  * Read or update the authenticated user's profile.
+ * Also routes admin dashboard actions via ?action=admin-* to avoid consuming
+ * an additional Vercel function slot (Hobby plan limit: 12).
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from '../_lib/auth.js';
+import { handleAdminAction } from '../_lib/admin-handler.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -21,6 +24,12 @@ const MAX_FIELD_LENGTH = 500;
 const MAX_BIO_LENGTH = 2000;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Route admin actions (admin auth handled inside handleAdminAction)
+  const action = String(req.query.action || '');
+  if (action.startsWith('admin-')) {
+    return handleAdminAction(action, req, res);
+  }
+
   const authUser = await requireAuth(req, res);
   if (!authUser) return;
 
