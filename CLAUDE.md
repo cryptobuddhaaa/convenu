@@ -4,14 +4,14 @@
 
 Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" features. Users plan trips, add contacts met at events, and mint soulbound cNFTs on Solana as proof-of-meeting.
 
-**Stack:** React 19 + Vite (SPA), Vercel serverless functions, Supabase (auth + Postgres), Solana (devnet), Telegram Bot + Mini App.
+**Stack:** React 19 + Vite (SPA), Vercel serverless functions, Supabase (auth + Postgres), Solana (devnet), Telegram Bot + Mini App, Brave Search API + Claude Haiku (contact enrichment).
 
 ## Architecture
 
 ```
 src/           → React SPA (Vite, Tailwind, Zustand)
 api/           → Vercel serverless functions (Node.js)
-api/_lib/      → Shared server utilities (auth, wallet enrichment, telegram age)
+api/_lib/      → Shared server utilities (auth, wallet enrichment, telegram age, contact enrichment)
 api/telegram/  → Telegram bot webhook + flows
 sql/           → Database migrations (run in Supabase SQL Editor)
 ```
@@ -19,7 +19,7 @@ sql/           → Database migrations (run in Supabase SQL Editor)
 ### Key Patterns
 
 - **SPA with tab navigation** — No client-side router. `App.tsx` uses `activeTab` state. The `vercel.json` rewrite `/((?!api/).*) → /index.html` ensures deep links work.
-- **Consolidated endpoints** — Vercel Hobby plan limits to 12 functions. `api/handshake/index.ts` uses `?action=` routing. Telegram flows are split into `_flows/` (underscore prefix = not a Vercel function).
+- **Consolidated endpoints** — Vercel Hobby plan limits to 12 functions. `api/handshake/index.ts` uses `?action=` routing. `api/profile/index.ts` consolidates profile CRUD, admin actions, and contact enrichment via `?action=` params. Telegram flows are split into `_flows/` (underscore prefix = not a Vercel function).
 - **Auth** — Supabase JWT via `Authorization: Bearer` header. All API endpoints use `requireAuth()` from `api/_lib/auth.ts`. Telegram users get synthetic emails (`tg_<id>@telegram.convenu.xyz`).
 - **Trust scores** — Written from 3 paths: bot `/start` linking (`account.ts`), Mini App login (`auth/telegram.ts`), and Dashboard recompute (`trust/compute.ts`). All 3 must stay in sync.
 - **Wallet verification** — Users sign a message containing their user ID + timestamp. Server verifies via `tweetnacl`. Uniqueness enforced: one verified wallet per user, one user per wallet.
@@ -48,6 +48,8 @@ npx tsc -b --noEmit  # Type-check only
 - `VITE_TREASURY_WALLET` — SOL fee recipient
 
 **Optional:**
+- `BRAVE_SEARCH_API_KEY` — Brave Search API for contact enrichment (free tier: 2,000 queries/month)
+- `ANTHROPIC_API_KEY` — Claude Haiku for contact enrichment LLM summarization
 - `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_CALLBACK_URL` — X OAuth
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` — Google Calendar
 - `HANDSHAKE_TREE_KEYPAIR`, `HANDSHAKE_MERKLE_TREE` — cNFT minting
@@ -61,6 +63,7 @@ npx tsc -b --noEmit  # Type-check only
 - Wallet verification has timestamp-based replay protection (5-min window)
 - Handshake claim uses atomic status check (`eq('status', 'pending')` in update) to prevent TOCTOU races
 - HTML entities in Luma event data are decoded via `decodeHtmlEntities()` — not used for rendering (API only returns JSON)
+- Contact enrichment: name/context inputs are truncated (200/500 char limits). Enrichment writes use service role key only. Usage tracked per-user per-month with enforced limits.
 
 ## Common Pitfalls
 
@@ -76,6 +79,8 @@ npx tsc -b --noEmit  # Type-check only
 
 6. **vite.config.ts dev server** — The `vercelApiPlugin` simulates Vercel's runtime locally. It supports `req.query`, `res.json()`, `res.redirect()`, `res.send()`, and `res.setHeader()`. If a handler uses a Vercel API not in the wrapper, it will fail only in dev (not production).
 
+7. **Contact enrichment architecture** — Enrichment logic lives in `api/_lib/enrichment.ts` (shared by both the web API and Telegram bot). The web API routes through `api/profile/index.ts?action=enrich` to avoid consuming a Vercel function slot. The Telegram bot flow is in `api/telegram/_flows/enrichment.ts`. Both call the same `performEnrichment()` pipeline. Enrichment data is stored as JSONB in `contact_enrichments` table. Usage is tracked in `enrichment_usage` (per-user, per-month). The client-side store is `src/hooks/useEnrichment.ts` (Zustand).
+
 ## Testing Checklist
 
 Before deploying, verify:
@@ -85,3 +90,6 @@ Before deploying, verify:
 - [ ] Dashboard trust score shows correct profile photo / social signals
 - [ ] Handshake initiate → claim → confirm-tx → mint flow works end-to-end
 - [ ] Wallet connect + verify in Phantom browser works
+- [ ] Contact enrichment: sparkle button triggers enrichment, inline panel displays results
+- [ ] Contact enrichment: usage counter updates, limit enforced at 10/month
+- [ ] Telegram `/enrich` command returns formatted profile with regenerate button
