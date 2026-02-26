@@ -96,7 +96,7 @@ export async function handleEnrich(chatId: number, telegramUserId: number, args:
         .from('contacts')
         .select('id, first_name, last_name, project_company, position')
         .eq('user_id', userId)
-        .ilike('telegram_handle', handle)
+        .or(`telegram_handle.ilike.@${handle},telegram_handle.ilike.${handle}`)
         .limit(1);
       contacts = data;
     } else {
