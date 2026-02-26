@@ -15,6 +15,7 @@
  *   admin-trust-dist  — Trust score distribution histogram
  *   admin-signups     — Signup trend data (daily, by method)
  *   admin-handshake-funnel — Handshake status funnel counts
+ *   admin-reset-enrichment — Reset a user's monthly enrichment usage to 0
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -66,6 +67,9 @@ export async function handleAdminAction(
       return;
     case 'admin-handshake-funnel':
       await handleHandshakeFunnel(req, res);
+      return;
+    case 'admin-reset-enrichment':
+      await handleResetEnrichment(req, res);
       return;
     default:
       res.status(400).json({ error: `Unknown admin action: ${action}` });
@@ -308,7 +312,9 @@ async function handleUserDetail(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const [profileRes, trustRes, walletsRes, handshakesRes, pointsRes, tgLinkRes, contactsRes, subscriptionRes] = await Promise.all([
+    const currentMonth = new Date().toISOString().substring(0, 7);
+
+    const [profileRes, trustRes, walletsRes, handshakesRes, pointsRes, tgLinkRes, contactsRes, subscriptionRes, enrichmentUsageRes] = await Promise.all([
       supabase.from('user_profiles').select('*').eq('user_id', userId).single(),
       supabase.from('trust_scores').select('*').eq('user_id', userId).single(),
       supabase.from('user_wallets').select('*').eq('user_id', userId),
@@ -322,6 +328,7 @@ async function handleUserDetail(req: VercelRequest, res: VercelResponse) {
       supabase.from('telegram_links').select('*').eq('user_id', userId).single(),
       supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId),
       supabase.from('subscriptions').select('*').eq('user_id', userId).single(),
+      supabase.from('enrichment_usage').select('usage_count, month').eq('user_id', userId).eq('month', currentMonth).maybeSingle(),
     ]);
 
     const totalPoints = (pointsRes.data || []).reduce(
@@ -338,6 +345,11 @@ async function handleUserDetail(req: VercelRequest, res: VercelResponse) {
       telegramLink: tgLinkRes.data || null,
       contactCount: contactsRes.count || 0,
       subscription: subscriptionRes.data || null,
+      enrichmentUsage: {
+        used: (enrichmentUsageRes.data as { usage_count: number } | null)?.usage_count ?? 0,
+        limit: 10,
+        month: currentMonth,
+      },
     });
   } catch (error) {
     console.error('Admin user detail error:', error);
@@ -562,6 +574,40 @@ async function handleSignups(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     console.error('Admin signups error:', error);
     res.status(500).json({ error: 'Failed to load signup data' });
+  }
+}
+
+// ─── admin-reset-enrichment ──────────────────────────────────────────────────
+
+async function handleResetEnrichment(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const userId = String(req.body?.userId || '');
+  if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) {
+    return res.status(400).json({ error: 'Valid userId required' });
+  }
+
+  try {
+    const month = new Date().toISOString().substring(0, 7);
+
+    const { error } = await supabase
+      .from('enrichment_usage')
+      .update({ usage_count: 0 })
+      .eq('user_id', userId)
+      .eq('month', month);
+
+    if (error) {
+      console.error('Admin reset enrichment error:', error);
+      return res.status(500).json({ error: 'Failed to reset enrichment usage' });
+    }
+
+    console.log(`[Admin] Reset enrichment usage for user ${userId} (month: ${month})`);
+    res.status(200).json({ success: true, month });
+  } catch (error) {
+    console.error('Admin reset enrichment error:', error);
+    res.status(500).json({ error: 'Failed to reset enrichment usage' });
   }
 }
 

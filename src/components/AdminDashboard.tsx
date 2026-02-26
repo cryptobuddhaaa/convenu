@@ -111,6 +111,7 @@ interface UserDetail {
   telegramLink: Record<string, unknown> | null;
   contactCount: number;
   subscription: Record<string, unknown> | null;
+  enrichmentUsage: { used: number; limit: number; month: string };
 }
 
 type AdminTab = 'overview' | 'users' | 'handshakes' | 'events' | 'trust' | 'signups';
@@ -404,6 +405,7 @@ function UsersSection({ onSelectUser }: { onSelectUser: (userId: string) => void
 function UserDetailPanel({ userId, onBack }: { userId: string; onBack: () => void }) {
   const [data, setData] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resettingEnrichment, setResettingEnrichment] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -412,6 +414,30 @@ function UserDetailPanel({ userId, onBack }: { userId: string; onBack: () => voi
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [userId]);
+
+  const handleResetEnrichment = async () => {
+    if (!confirm('Reset this user\'s enrichment usage to 0 for the current month?')) return;
+    setResettingEnrichment(true);
+    try {
+      const resp = await authFetch(`${API_BASE}?action=admin-reset-enrichment`, {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error((err as { error?: string }).error || `HTTP ${resp.status}`);
+      }
+      // Update local state
+      setData(prev => prev ? {
+        ...prev,
+        enrichmentUsage: { ...prev.enrichmentUsage, used: 0 },
+      } : prev);
+    } catch (err) {
+      console.error('Failed to reset enrichment:', err);
+      alert('Failed to reset enrichment usage');
+    }
+    setResettingEnrichment(false);
+  };
 
   if (loading) return <LoadingSpinner />;
   if (!data) return <p className="text-red-400">Failed to load user details</p>;
@@ -545,6 +571,33 @@ function UserDetailPanel({ userId, onBack }: { userId: string; onBack: () => voi
           {p?.linkedin_url ? (
             <p className="text-slate-300">LinkedIn: <span className="text-white text-xs">{String(p.linkedin_url)}</span></p>
           ) : null}
+        </div>
+      </div>
+
+      {/* Enrichment usage */}
+      <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="text-sm font-medium text-slate-400 mb-1">Enrichment Usage</h4>
+            <p className="text-white">
+              <span className="font-mono font-bold text-lg">{data.enrichmentUsage.used}</span>
+              <span className="text-slate-400"> / {data.enrichmentUsage.limit}</span>
+              <span className="text-slate-500 text-xs ml-2">({data.enrichmentUsage.month})</span>
+            </p>
+            <div className="w-48 bg-slate-700 rounded-full h-2 mt-2">
+              <div
+                className={`h-2 rounded-full ${data.enrichmentUsage.used >= data.enrichmentUsage.limit ? 'bg-red-500' : 'bg-blue-500'}`}
+                style={{ width: `${Math.min(100, (data.enrichmentUsage.used / data.enrichmentUsage.limit) * 100)}%` }}
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleResetEnrichment}
+            disabled={resettingEnrichment || data.enrichmentUsage.used === 0}
+            className="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {resettingEnrichment ? 'Resetting...' : 'Reset to 0'}
+          </button>
         </div>
       </div>
 
