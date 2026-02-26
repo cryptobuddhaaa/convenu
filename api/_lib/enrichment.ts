@@ -72,7 +72,7 @@ async function searchBrave(query: string): Promise<BraveSearchResult[]> {
   try {
     const params = new URLSearchParams({
       q: query,
-      count: '5',
+      count: '10',
       text_decorations: 'false',
       search_lang: 'en',
     });
@@ -108,16 +108,19 @@ async function searchBrave(query: string): Promise<BraveSearchResult[]> {
 async function searchWeb(name: string, context?: string): Promise<{ results: BraveSearchResult[]; queries: string[] }> {
   const queries: string[] = [];
 
-  // Query 1: name + context (company/project)
+  // Query 1: name + context (exact match attempt)
   if (context) {
-    queries.push(`"${name}" "${context}"`);
+    queries.push(`"${name}" ${context}`);
   }
 
-  // Query 2: name + crypto/web3 context
-  queries.push(`"${name}" crypto web3 blockchain`);
+  // Query 2: name without quotes + context (fallback for less-known people)
+  queries.push(`${name} ${context || ''} professional background`.trim());
 
-  // Query 3: name + LinkedIn/Twitter for social links
-  queries.push(`"${name}" ${context ? context + ' ' : ''}LinkedIn OR Twitter OR X.com`);
+  // Query 3: name + crypto/web3 context
+  queries.push(`${name} ${context || ''} crypto web3 blockchain`.trim());
+
+  // Query 4: name + LinkedIn/Twitter for social links
+  queries.push(`${name} ${context ? context + ' ' : ''}site:linkedin.com OR site:x.com OR site:twitter.com`);
 
   const allResults: BraveSearchResult[] = [];
   const seenUrls = new Set<string>();
@@ -131,6 +134,8 @@ async function searchWeb(name: string, context?: string): Promise<{ results: Bra
       }
     }
   }
+
+  console.log(`[Enrichment] Search for "${name}" (context: ${context || 'none'}): ${allResults.length} unique results from ${queries.length} queries`);
 
   return { results: allResults, queries };
 }
@@ -150,29 +155,32 @@ async function synthesizeProfile(
     .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description}`)
     .join('\n\n');
 
-  const prompt = `You are a professional contact researcher. Based on web search results, create a structured profile for "${name}"${context ? ` (associated with: ${context})` : ''}.
+  const resultCount = searchResults.length;
+  const prompt = `You are an expert professional networking researcher preparing a contact dossier. Build a comprehensive, structured profile for "${name}"${context ? ` (associated with: ${context})` : ''}.
 
-SEARCH RESULTS:
-${searchContext || 'No search results found.'}
+SEARCH RESULTS (${resultCount} found):
+${searchContext || 'No search results available.'}
 
 Return a JSON object with this exact structure (no markdown, no code fences, just raw JSON):
 {
-  "summary": "2-3 sentence professional summary of who this person is",
+  "summary": "2-3 sentence professional summary — who they are, what they're known for, and why they matter in their field",
   "roles": [{"title": "their role", "organization": "company/org", "current": true}],
-  "background": ["key background point 1", "key background point 2"],
-  "notableActivity": ["recent talk/project/tweet", "another activity"],
-  "talkingPoints": ["suggested conversation starter 1", "another conversation starter"],
-  "socialLinks": [{"platform": "twitter", "handle": "@handle"}, {"platform": "linkedin", "url": "url"}],
-  "suggestedTags": ["investor", "developer"]
+  "background": ["key career milestone or background point"],
+  "notableActivity": ["recent talk, project, publication, tweet, or event participation"],
+  "talkingPoints": ["specific, actionable conversation starter based on their work and interests"],
+  "socialLinks": [{"platform": "twitter", "handle": "@handle"}, {"platform": "linkedin", "url": "full url"}],
+  "suggestedTags": ["professional category tag"]
 }
 
 Rules:
-- Only include information you can verify from the search results
-- If information is sparse, keep sections brief rather than hallucinating
-- talkingPoints should be specific and actionable based on their real work/interests
-- suggestedTags should be 1-3 relevant professional categories
-- For socialLinks, only include handles/urls found in search results
-- If you cannot find reliable information, return minimal data with a brief summary noting limited info available`;
+- Prioritize information from the search results. For details not in search results, you may supplement with your general knowledge if you recognize this person, but clearly ground claims in what's plausible.
+- Provide at least 3-5 background points covering career trajectory, education, and key achievements.
+- Provide at least 3-4 talking points that are specific and actionable — reference their actual projects, talks, or interests.
+- notableActivity should include recent events, talks, projects, or public activity with approximate dates if available.
+- suggestedTags should be 2-4 relevant professional categories (e.g., "community-builder", "investor", "developer", "founder").
+- For socialLinks, include any handles/URLs found in search results. If you recognize this person and know their handles, include those too.
+- ${context ? `Important context: this person is associated with "${context}" — make sure to explore this connection in the profile.` : 'If no organization context was provided, focus on what can be determined from search results and general knowledge.'}
+- DO NOT return sparse/minimal output. Even with limited search results, provide a useful networking brief using all available signals.`;
 
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -183,7 +191,7 @@ Rules:
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
+      max_tokens: 2500,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -219,11 +227,12 @@ Rules:
     };
   }
 
-  // Determine confidence based on result quality
+  // Determine confidence based on result quality + profile completeness
   let confidence: 'low' | 'medium' | 'high' = 'low';
-  if (searchResults.length >= 8 && parsed.roles.length > 0 && parsed.summary.length > 50) {
+  const profileRichness = (parsed.roles?.length || 0) + (parsed.background?.length || 0) + (parsed.notableActivity?.length || 0);
+  if (searchResults.length >= 8 && profileRichness >= 5 && parsed.summary.length > 80) {
     confidence = 'high';
-  } else if (searchResults.length >= 3 && parsed.summary.length > 30) {
+  } else if ((searchResults.length >= 3 || profileRichness >= 3) && parsed.summary.length > 40) {
     confidence = 'medium';
   }
 
