@@ -299,6 +299,79 @@ function formatEventList(events: ParsedEvent[]): string {
 
 // --- Contacts browsing ---
 
+type DateFilterKey = 'today' | '3d' | 'week' | 'month' | 'all';
+
+function getDateFilterGte(key: DateFilterKey): string | undefined {
+  const now = new Date();
+  switch (key) {
+    case 'today':
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    case '3d': {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 3);
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+    }
+    case 'week': {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 7);
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+    }
+    case 'month': {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 30);
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+    }
+    case 'all':
+      return undefined;
+  }
+}
+
+const DATE_FILTER_LABELS: Record<DateFilterKey, string> = {
+  today: '📅 Today',
+  '3d': '📅 Last 3 Days',
+  week: '📅 Last Week',
+  month: '📅 Last Month',
+  all: '📋 All Time',
+};
+
+async function showDateFilterMenu(chatId: number) {
+  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [
+    [{ text: '📅 Today', callback_data: 'cf:today' }],
+    [{ text: '📅 Last 3 Days', callback_data: 'cf:3d' }],
+    [{ text: '📅 Last Week', callback_data: 'cf:week' }],
+    [{ text: '📅 Last Month', callback_data: 'cf:month' }],
+    [{ text: '📋 All Time', callback_data: 'cf:all' }],
+  ];
+
+  await sendMessage(chatId, '👥 <b>All Contacts</b>\n\nFilter by when they were added:', {
+    reply_markup: { inline_keyboard: keyboard },
+  });
+}
+
+export async function handleContactsFilterSelection(
+  chatId: number,
+  telegramUserId: number,
+  data: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) return;
+
+  // data is "<filterKey>" or "<filterKey>:<offset>"
+  const parts = data.split(':');
+  const filterKey = parts[0] as DateFilterKey;
+  const offset = parts[1] ? parseInt(parts[1], 10) : 0;
+
+  if (!DATE_FILTER_LABELS[filterKey]) return;
+
+  const gte = getDateFilterGte(filterKey);
+  const label = `All Contacts — ${DATE_FILTER_LABELS[filterKey]}`;
+
+  await showContactsList(chatId, userId, undefined, undefined, label, gte ? { gte } : undefined, offset, filterKey);
+}
+
 export async function handleContacts(chatId: number, telegramUserId: number) {
   const userId = await getLinkedUserId(telegramUserId);
   if (!userId) {
@@ -319,8 +392,8 @@ export async function handleContacts(chatId: number, telegramUserId: number) {
     .limit(10);
 
   if (!itineraries || itineraries.length === 0) {
-    // No itineraries — show all contacts
-    await showContactsList(chatId, userId, undefined, undefined, 'All Contacts');
+    // No itineraries — show date filter menu
+    await showDateFilterMenu(chatId);
     return;
   }
 
@@ -352,7 +425,7 @@ export async function handleContactsListSelection(
   if (!userId) return;
 
   if (selection === 'all') {
-    await showContactsList(chatId, userId, undefined, undefined, 'All Contacts');
+    await showDateFilterMenu(chatId);
     return;
   }
 
@@ -451,12 +524,17 @@ export async function handleContactsEventSelection(
   }
 }
 
+const PAGE_SIZE = 10;
+
 async function showContactsList(
   chatId: number,
   userId: string,
   itineraryId: string | undefined,
   eventId: string | undefined,
-  label: string
+  label: string,
+  dateFilter?: { gte: string },
+  offset: number = 0,
+  filterKey?: string
 ) {
   let query = supabase
     .from('contacts')
@@ -470,16 +548,26 @@ async function showContactsList(
   if (eventId) {
     query = query.eq('event_id', eventId);
   }
+  if (dateFilter) {
+    query = query.gte('created_at', dateFilter.gte);
+  }
 
-  const { data: contacts } = await query.limit(50);
+  // Fetch one extra to detect if there are more pages
+  const { data: contacts } = await query.range(offset, offset + PAGE_SIZE);
 
   if (!contacts || contacts.length === 0) {
-    await sendMessage(chatId, `📋 <b>${escapeHtml(label)}</b>\n\nNo contacts found.`);
+    const noResultsMsg = offset > 0
+      ? `📋 <b>${escapeHtml(label)}</b>\n\nNo more contacts.`
+      : `📋 <b>${escapeHtml(label)}</b>\n\nNo contacts found.`;
+    await sendMessage(chatId, noResultsMsg);
     return;
   }
 
+  const hasMore = contacts.length > PAGE_SIZE;
+  const pageContacts = hasMore ? contacts.slice(0, PAGE_SIZE) : contacts;
+
   // Fetch last 3 notes per contact in a single query
-  const contactIds = contacts.map((c) => c.id as string);
+  const contactIds = pageContacts.map((c) => c.id as string);
   const { data: allNotes } = await supabase
     .from('contact_notes')
     .select('contact_id, content, created_at')
@@ -499,9 +587,10 @@ async function showContactsList(
     }
   }
 
-  let message = `📋 <b>${escapeHtml(label)}</b> (${contacts.length} contact${contacts.length !== 1 ? 's' : ''})\n\n`;
+  const showing = offset > 0 ? ` (${offset + 1}–${offset + pageContacts.length})` : ` (${pageContacts.length}${hasMore ? '+' : ''})`;
+  let message = `📋 <b>${escapeHtml(label)}</b>${showing}\n\n`;
 
-  for (const c of contacts) {
+  for (const c of pageContacts) {
     const cId = c.id as string;
     const name = escapeHtml(`${c.first_name} ${c.last_name || ''}`.trim());
     const company = c.project_company ? ` — ${escapeHtml(c.project_company)}` : '';
@@ -544,15 +633,18 @@ async function showContactsList(
 
   message += 'Tap a contact below to view, edit, or delete:';
 
-  // Per-contact selection buttons (max 20 to stay within Telegram limits)
   const keyboard: Array<Array<{ text: string; callback_data?: string; web_app?: { url: string } }>> = [];
-  for (const c of contacts.slice(0, 20)) {
+  for (const c of pageContacts) {
     const name = `${c.first_name} ${c.last_name || ''}`.trim();
     const company = c.project_company ? ` — ${c.project_company}` : '';
     keyboard.push([{
       text: `👤 ${name}${company}`.substring(0, 60),
       callback_data: `cv:${c.id}`,
     }]);
+  }
+
+  if (hasMore && filterKey) {
+    keyboard.push([{ text: 'More ›', callback_data: `cf:${filterKey}:${offset + PAGE_SIZE}` }]);
   }
   keyboard.push([{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }]);
 

@@ -52,6 +52,7 @@ import {
   handleContacts,
   handleContactsListSelection,
   handleContactsEventSelection,
+  handleContactsFilterSelection,
   handleContacted,
   handleContactDetailCallback,
   handleContactActionCallback,
@@ -314,6 +315,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       else if (data.startsWith('ce:')) {
         await handleContactsEventSelection(chatId, telegramUserId, data.substring(3), cq.id);
+      }
+      // --- Contacts date filter + pagination ---
+      else if (data.startsWith('cf:')) {
+        await handleContactsFilterSelection(chatId, telegramUserId, data.substring(3), cq.id);
       }
       // --- Contact detail view ---
       else if (data.startsWith('cv:')) {
