@@ -48,23 +48,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : req.headers.host;
   const webhookUrl = `https://${host}/api/telegram/webhook`;
 
-  const response = await fetch(
-    `https://api.telegram.org/bot${botToken}/setWebhook`,
-    {
+  const tgApi = (method: string, body: Record<string, unknown>) =>
+    fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: webhookUrl,
-        secret_token: webhookSecret,
-        allowed_updates: ['message', 'callback_query'],
-      }),
-    }
-  );
+      body: JSON.stringify(body),
+    }).then(r => r.json());
 
-  const result = await response.json();
+  // 1. Register webhook
+  const webhookResult = await tgApi('setWebhook', {
+    url: webhookUrl,
+    secret_token: webhookSecret,
+    allowed_updates: ['message', 'callback_query'],
+  });
+
+  // 2. Register bot commands (visible in the "/" menu)
+  const commandsResult = await tgApi('setMyCommands', {
+    commands: [
+      { command: 'newitinerary', description: 'Create a new trip' },
+      { command: 'newevent', description: 'Add an event (manual or Luma import)' },
+      { command: 'itineraries', description: 'View your trips & events' },
+      { command: 'today', description: 'Today\'s events at a glance' },
+      { command: 'newcontact', description: 'Add a contact' },
+      { command: 'contacts', description: 'Browse contacts by trip or event' },
+      { command: 'contacted', description: 'Mark a follow-up (@handle)' },
+      { command: 'handshake', description: 'Send a Proof of Handshake' },
+      { command: 'enrich', description: 'AI-research a contact' },
+      { command: 'trust', description: 'View your trust score' },
+      { command: 'points', description: 'Check your points balance' },
+      { command: 'shakehistory', description: 'View handshake history' },
+      { command: 'help', description: 'Full command reference' },
+      { command: 'cancel', description: 'Cancel current operation' },
+    ],
+  });
+
+  // 3. Set bot description (shown when someone opens the chat for the first time, max 512 chars)
+  const descriptionResult = await tgApi('setMyDescription', {
+    description:
+      'Convenu is your event networking companion.\n\n' +
+      'Plan trips, import Luma events, track contacts you meet, ' +
+      'and mint soulbound NFTs on Solana as Proof of Handshake.\n\n' +
+      'Features:\n' +
+      '- Trip & event planning with Luma import\n' +
+      '- Contact management with tags & notes\n' +
+      '- AI-powered contact enrichment\n' +
+      '- Proof of Handshake (soulbound cNFTs)\n' +
+      '- Trust scores & points\n' +
+      '- Google Calendar sync\n' +
+      '- X/Twitter verification\n\n' +
+      'Tap Start to get going!',
+  });
+
+  // 4. Set short description (shown on bot profile page, max 120 chars)
+  const shortDescResult = await tgApi('setMyShortDescription', {
+    short_description: 'Event networking with trip planning, contact management, AI enrichment & Proof of Handshake on Solana.',
+  });
 
   return res.status(200).json({
     webhookUrl,
-    telegramResponse: result,
+    webhook: webhookResult,
+    commands: commandsResult,
+    description: descriptionResult,
+    shortDescription: shortDescResult,
   });
 }

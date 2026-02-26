@@ -29,9 +29,12 @@ export async function handleStart(
           '/newcontact — Add a contact\n' +
           '/contacts — Browse contacts by trip or event\n' +
           '/contacted @handle — Log a follow-up\n\n' +
-          '💡 <b>Quick actions</b>\n' +
-          '• <b>Forward a message</b> → adds a note if the contact exists, or creates a new contact\n' +
-          '• Tag and annotate contacts in the web app\n\n' +
+          '🤝 <b>Proof of Handshake</b>\n' +
+          '/handshake — Send a handshake & mint a soulbound NFT\n' +
+          '/trust — View your trust score\n\n' +
+          '✨ <b>AI & Quick actions</b>\n' +
+          '/enrich — AI-research a contact\'s background\n' +
+          '• <b>Forward a message</b> → saves a note or creates a contact\n\n' +
           'Use /help for the full command list.',
         {
           reply_markup: {
@@ -45,14 +48,15 @@ export async function handleStart(
       await sendMessage(
         chatId,
         '👋 <b>Welcome to Convenu!</b>\n\n' +
-          'Your all-in-one trip planner and networking companion.\n\n' +
-          '✈️ Create and manage trip itineraries\n' +
-          '📅 Import events from Luma links\n' +
-          '👥 Track contacts you meet at events\n' +
-          '🏷 Tag and add notes to contacts\n' +
-          '💬 Follow up via Telegram DMs\n' +
-          '📨 Bulk-invite contacts from the web app\n\n' +
-          'Tap <b>Open App</b> to get started, or link an existing account from the web app → Contacts → Link Telegram.',
+          'Your event networking companion — plan trips, track contacts, and prove you met.\n\n' +
+          '📋 Create trip itineraries & import Luma events\n' +
+          '👥 Track contacts with tags, notes & follow-ups\n' +
+          '🤝 Mint soulbound NFTs as Proof of Handshake\n' +
+          '✨ AI-powered contact enrichment\n' +
+          '📊 Trust scores & points system\n' +
+          '📅 Google Calendar sync for Luma events\n' +
+          '🔗 Solana wallet & X account verification\n\n' +
+          'Tap <b>Open App</b> to get started, or link an existing account from the web app.',
         {
           reply_markup: {
             inline_keyboard: [
@@ -219,6 +223,10 @@ export async function handleStart(
       '/newcontact — Add a contact\n' +
       '/contacts — Browse contacts by trip or event\n' +
       '/contacted @handle — Log a follow-up\n\n' +
+      '🤝 <b>Handshakes & Trust</b>\n' +
+      '/handshake — Prove you met someone (soulbound NFT)\n' +
+      '/enrich — AI-research a contact\'s background\n' +
+      '/trust — View your trust score\n\n' +
       '💡 <b>Forward a message</b> from someone → saves them as a contact, or adds a note if they already exist!\n\n' +
       'Use /help for the full command list.'
   );

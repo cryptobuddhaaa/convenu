@@ -95,7 +95,7 @@ async function handleTextInput(
   // No matching state
   await sendMessage(
     chatId,
-    'Use /newcontact to add a contact, /newitinerary to create a trip, /newevent to add an event, or /help for commands.'
+    'Use /newcontact to add a contact, /newitinerary to plan a trip, /handshake to prove you met someone, or /help for all commands.'
   );
 }
 
@@ -187,8 +187,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           '<b>📖 Command Reference</b>\n\n' +
             '📋 <b>Trip Planning</b>\n' +
             '/newitinerary — Create a new trip with dates & location\n' +
-            '/newevent — Add an event to a trip (manual or Luma import)\n' +
-            '/itineraries — View your trips and events with Luma & map links\n' +
+            '/newevent — Add an event (manual or paste Luma links)\n' +
+            '/itineraries — View your trips and events\n' +
             '/today — Quick view of today\'s events across all trips\n\n' +
             '👥 <b>Contact Management</b>\n' +
             '/newcontact — Add a contact linked to a trip/event\n' +
@@ -204,14 +204,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             '/enrich — Pick a contact to research with AI\n' +
             '/enrich Name, Company — Enrich a specific contact\n\n' +
             '⚡ <b>Quick Actions</b>\n' +
-            '• <b>Forward a message</b> → if the sender is already a contact, save it as a timestamped note; otherwise create a new contact\n' +
+            '• <b>Forward a message</b> → saves a note on the contact, or creates a new contact\n' +
             '• <b>Paste Luma links</b> during /newevent → auto-imports event details\n\n' +
             '🏷 <b>Tags & Notes</b>\n' +
-            '• Tag contacts in the web app (e.g., investor, developer) and filter by tag\n' +
+            '• Tag contacts (e.g. investor, developer) and filter by tag\n' +
             '• Add timestamped notes to track relationship history\n' +
             '• Tags are visible when browsing /contacts\n\n' +
-            '🌐 <b>Web App Features</b>\n' +
-            '• <b>Invite</b> — Bulk-compose personalized messages\n' +
+            '🌐 <b>Web App</b>\n' +
+            '• <b>Dashboard</b> — Trust score breakdown & account overview\n' +
+            '• <b>Google Calendar</b> — Import Luma events from your calendar\n' +
+            '• <b>Wallet & X</b> — Connect Solana wallet, verify X account\n' +
+            '• <b>Invite</b> — Bulk-compose personalized messages to contacts\n' +
             '• <b>Export CSV</b> — Download contacts as a spreadsheet\n' +
             '• Search, sort, and filter contacts by tags or text\n\n' +
             '/cancel — Cancel current operation',
