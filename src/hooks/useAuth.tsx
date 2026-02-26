@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         telegramAuthInProgress.current = true;
         try {
 
-          const response = await fetch('/api/auth/telegram', {
+          const response = await fetch('/api/auth?action=telegram', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ initData }),
@@ -218,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
 
-      const response = await fetch('/api/auth/telegram', {
+      const response = await fetch('/api/auth?action=telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ initData }),

@@ -29,7 +29,7 @@ export const lumaService = {
 
   /**
    * Fetch event data from Luma URL via serverless proxy
-   * Uses the /api/fetch-luma endpoint to bypass CORS restrictions
+   * Uses the /api/calendar?action=fetch-luma endpoint to bypass CORS restrictions
    */
   async fetchEventData(lumaUrl: string): Promise<LumaEventData | null> {
     if (!this.isLumaUrl(lumaUrl)) {
@@ -38,7 +38,7 @@ export const lumaService = {
 
     try {
       // Use our serverless function as a CORS proxy
-      const apiUrl = `/api/fetch-luma?url=${encodeURIComponent(lumaUrl)}`;
+      const apiUrl = `/api/calendar?action=fetch-luma&url=${encodeURIComponent(lumaUrl)}`;
 
       const response = await authFetch(apiUrl, {
         method: 'GET',

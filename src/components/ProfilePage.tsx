@@ -227,7 +227,7 @@ export default function ProfilePage() {
   const handleConnectWallet = async () => {
     setWalletLinking(true);
     try {
-      const response = await authFetch('/api/auth/wallet-login', { method: 'POST' });
+      const response = await authFetch('/api/auth?action=wallet-login', { method: 'POST' });
       if (!response.ok) throw new Error('Failed to generate login link');
       const { url } = await response.json();
 

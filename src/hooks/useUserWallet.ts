@@ -131,7 +131,7 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
 
   verifyWallet: async (walletId: string, signature: string, message: string, walletAddress: string) => {
     try {
-      const response = await authFetch('/api/wallet/verify', {
+      const response = await authFetch('/api/profile?action=verify-wallet', {
         method: 'POST',
         body: JSON.stringify({ walletId, signature, message, walletAddress }),
       });

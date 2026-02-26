@@ -4,7 +4,7 @@ import { supabase, WEBAPP_URL } from '../_lib/config.js';
 import { sendMessage } from '../_lib/telegram.js';
 import { getLinkedUserId } from '../_lib/state.js';
 import { estimateTelegramAccountAgeDays } from '../../_lib/telegram-age.js';
-import { computeTrustCategories } from '../../trust/compute.js';
+import { computeTrustCategories } from '../../_lib/trust-categories.js';
 import { mergeAccounts } from '../../_lib/account-merge.js';
 
 export async function handleStart(

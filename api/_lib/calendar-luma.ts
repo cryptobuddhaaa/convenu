@@ -1,6 +1,6 @@
 /**
- * Vercel Serverless Function: Fetch Luma events from Google Calendar
- * POST /api/google-calendar/luma-events
+ * Google Calendar Luma events filter handler.
+ * Routed via /api/calendar?action=luma-events
  *
  * Queries ALL calendars in the user's account (not just primary).
  * Filters Google Calendar events to only return those from Luma.
@@ -12,7 +12,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth } from '../_lib/auth.js';
+import { requireAuth } from './auth.js';
 
 interface GoogleCalendarItem {
   id: string;
@@ -101,7 +101,7 @@ async function fetchEventsFromCalendar(
   return data.items || [];
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleLumaEvents(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });

@@ -199,7 +199,7 @@ export default function Dashboard() {
         // Trigger trust score recomputation before reading
         const session = (await supabase.auth.getSession()).data.session;
         if (session?.access_token) {
-          await fetch('/api/trust/compute', {
+          await fetch('/api/profile?action=compute-trust', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${session.access_token}`,

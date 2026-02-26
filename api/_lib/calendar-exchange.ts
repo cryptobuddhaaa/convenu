@@ -1,12 +1,12 @@
 /**
- * Vercel Serverless Function: Exchange Google OAuth code for access token
- * POST /api/google-calendar/exchange-token
+ * Google Calendar token exchange handler.
+ * Routed via /api/calendar?action=exchange-token
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth } from '../_lib/auth.js';
+import { requireAuth } from './auth.js';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleExchangeToken(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });

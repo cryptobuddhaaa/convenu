@@ -308,7 +308,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
                   if (tgGenerating) return;
                   setTgGenerating(true);
                   try {
-                    const response = await authFetch('/api/auth/wallet-login', { method: 'POST' });
+                    const response = await authFetch('/api/auth?action=wallet-login', { method: 'POST' });
                     if (!response.ok) throw new Error('Failed to generate login link');
                     const { url: baseUrl } = await response.json();
                     // Append claim param so the wallet browser lands on the claim page

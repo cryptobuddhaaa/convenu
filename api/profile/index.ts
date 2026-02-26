@@ -1,12 +1,15 @@
 /**
  * GET/PUT /api/profile?action=...
- * Read or update the authenticated user's profile.
- * Also routes admin dashboard actions via ?action=admin-* to avoid consuming
- * an additional Vercel function slot (Hobby plan limit: 12).
+ * Consolidated profile, admin, trust, and wallet endpoint.
  *
- * Enrichment actions:
- *   POST ?action=enrich  — AI-powered contact enrichment
- *   GET  ?action=enrich-usage — current month's usage + all enrichments
+ * Actions routed here to minimize Vercel Hobby plan function count:
+ *   admin-*          — Admin dashboard (delegated to admin-handler)
+ *   wallet-auth      — Wallet-based login/signup (no JWT)
+ *   compute-trust    — Recompute trust score (JWT)
+ *   verify-wallet    — Verify wallet ownership (JWT)
+ *   enrich           — AI-powered contact enrichment (POST, JWT)
+ *   enrich-usage     — Current month's usage + all enrichments (GET, JWT)
+ *   (none)           — Profile CRUD (GET/PUT, JWT)
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -18,6 +21,8 @@ import {
   getUsage,
   getEnrichmentsForUser,
 } from '../_lib/enrichment.js';
+import { handleComputeTrust } from '../_lib/trust-handler.js';
+import { handleWalletAuth, handleWalletVerify } from '../_lib/wallet-handler.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -37,6 +42,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const action = String(req.query.action || '');
   if (action.startsWith('admin-')) {
     return handleAdminAction(action, req, res);
+  }
+
+  // Wallet-based auth (no JWT required — this IS the auth flow)
+  if (action === 'wallet-auth') {
+    return handleWalletAuth(req, res);
+  }
+
+  // Trust score computation (has own auth check inside)
+  if (action === 'compute-trust') {
+    return handleComputeTrust(req, res);
+  }
+
+  // Wallet verification (has own auth check inside)
+  if (action === 'verify-wallet') {
+    return handleWalletVerify(req, res);
   }
 
   const authUser = await requireAuth(req, res);

@@ -72,7 +72,7 @@ class GoogleCalendarService {
    * Exchanges authorization code for access token (server-side)
    */
   async exchangeCodeForToken(code: string): Promise<{ accessToken: string }> {
-    const response = await authFetch('/api/google-calendar/exchange-token', {
+    const response = await authFetch('/api/calendar?action=exchange-token', {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
@@ -92,7 +92,7 @@ class GoogleCalendarService {
     timeMin?: string,
     timeMax?: string
   ): Promise<{ events: GoogleCalendarEvent[]; meta?: LumaEventsMetaInfo }> {
-    const response = await authFetch('/api/google-calendar/luma-events', {
+    const response = await authFetch('/api/calendar?action=luma-events', {
       method: 'POST',
       body: JSON.stringify({
         accessToken,

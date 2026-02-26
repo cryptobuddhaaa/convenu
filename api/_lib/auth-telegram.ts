@@ -1,6 +1,6 @@
 /**
- * Vercel Serverless Function: Telegram Mini App Authentication
- * POST /api/auth/telegram
+ * Telegram Mini App Authentication handler.
+ * Routed via /api/auth?action=telegram
  *
  * Verifies Telegram Mini App initData, finds or creates a Supabase user,
  * and returns a magic link token that the client can use to establish a session.
@@ -9,8 +9,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
-import { estimateTelegramAccountAgeDays } from '../_lib/telegram-age.js';
-import { computeTrustCategories } from '../trust/compute.js';
+import { estimateTelegramAccountAgeDays } from './telegram-age.js';
+import { computeTrustCategories } from './trust-categories.js';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -88,7 +88,7 @@ interface TelegramWebAppUser {
   photo_url?: string;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleTelegramAuth(req: VercelRequest, res: VercelResponse) {
   // CORS headers for Mini App context — restrict to our own origin
   const allowedOrigin = process.env.WEBAPP_URL || 'https://app.convenu.xyz';
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);

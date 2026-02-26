@@ -1,17 +1,15 @@
 /**
- * POST /api/wallet/verify
- *
- * Actions:
- *   ?action=verify (default) — Verifies wallet ownership for an authenticated user.
- *   ?action=auth             — Wallet-based login/signup via signed message. No JWT required.
+ * Wallet verification and wallet-based auth handlers.
+ * handleWalletAuth:   Routed via /api/profile?action=wallet-auth (no JWT required)
+ * handleWalletVerify: Routed via /api/profile?action=verify-wallet (JWT required)
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
-import { requireAuth } from '../_lib/auth.js';
-import { recomputeFromStored } from '../_lib/trust-recompute.js';
+import { requireAuth } from './auth.js';
+import { recomputeFromStored } from './trust-recompute.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -22,7 +20,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 /**
  * Wallet-based authentication: verify signature, find or create user, return token_hash.
  */
-async function handleWalletAuth(req: VercelRequest, res: VercelResponse) {
+export async function handleWalletAuth(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   const { wallet_address, signature, message, tx_message } = req.body || {};
 
   if (!wallet_address || !signature || !message) {
@@ -50,8 +52,6 @@ async function handleWalletAuth(req: VercelRequest, res: VercelResponse) {
   let isValid: boolean;
   if (tx_message) {
     // Transaction-based signing: verify signature against serialized transaction message bytes.
-    // Used by Android app with MWA signTransactions (sign_messages is optional in MWA spec
-    // and not supported by Seeker/SeedVault).
     let txMessageBytes: Uint8Array;
     try {
       txMessageBytes = bs58.decode(tx_message);
@@ -202,18 +202,14 @@ async function handleWalletAuth(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+/**
+ * Wallet ownership verification for an authenticated user.
+ */
+export async function handleWalletVerify(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const action = (req.query.action as string) || 'verify';
-
-  if (action === 'auth') {
-    return handleWalletAuth(req, res);
-  }
-
-  // --- Default action: verify (requires auth) ---
   try {
     const authUser = await requireAuth(req, res);
     if (!authUser) return;
@@ -226,7 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Verify the signature
     const { PublicKey } = await import('@solana/web3.js');
-    const publicKey = new PublicKey(walletAddress); // already validated above
+    const publicKey = new PublicKey(walletAddress);
     const messageBytes = new TextEncoder().encode(message);
     const signatureBytes = bs58.decode(signature);
 

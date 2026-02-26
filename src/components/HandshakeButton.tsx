@@ -132,7 +132,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
     if (tgGenerating) return;
     setTgGenerating(true);
     try {
-      const response = await authFetch('/api/auth/wallet-login', { method: 'POST' });
+      const response = await authFetch('/api/auth?action=wallet-login', { method: 'POST' });
       if (!response.ok) throw new Error('Failed to generate login link');
       const { url } = await response.json();
 
