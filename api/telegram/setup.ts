@@ -1,18 +1,17 @@
 /**
  * Vercel Serverless Function: Register Telegram Webhook
- * POST /api/telegram/setup
+ * POST /api/telegram/setup  (Authorization: Bearer <BOT_TOKEN>)
+ * GET  /api/telegram/setup?token=<BOT_TOKEN>  (browser-friendly)
  *
  * Call this once after deployment to register the webhook URL with Telegram.
  * The webhook secret is derived from the bot token so it stays in sync.
- *
- * Requires Authorization: Bearer <BOT_TOKEN> to prevent unauthorized access.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -21,13 +20,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN not configured' });
   }
 
-  // Authenticate: caller must provide the bot token as Bearer token
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  // Authenticate: caller must provide the bot token
+  // POST: via Authorization: Bearer <token> header
+  // GET:  via ?token=<token> query parameter (for browser use)
+  let providedToken: string | undefined;
+
+  if (req.method === 'GET') {
+    const tokenParam = req.query.token;
+    providedToken = typeof tokenParam === 'string' ? tokenParam : undefined;
+  } else {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      providedToken = authHeader.substring('Bearer '.length);
+    }
   }
 
-  const providedToken = authHeader.substring('Bearer '.length);
+  if (!providedToken) {
+    return res.status(401).json({ error: 'Unauthorized — provide token via ?token= query param (GET) or Authorization header (POST)' });
+  }
+
   if (
     providedToken.length !== botToken.length ||
     !crypto.timingSafeEqual(Buffer.from(providedToken), Buffer.from(botToken))
