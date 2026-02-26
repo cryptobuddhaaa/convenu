@@ -240,7 +240,7 @@ export async function getUsage(userId: string): Promise<{ used: number; limit: n
     .select('usage_count')
     .eq('user_id', userId)
     .eq('month', month)
-    .single();
+    .maybeSingle();
 
   return {
     used: data?.usage_count ?? 0,
@@ -257,7 +257,7 @@ async function incrementUsage(userId: string): Promise<void> {
     .select('id, usage_count')
     .eq('user_id', userId)
     .eq('month', month)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     await supabase
@@ -311,8 +311,8 @@ export async function performEnrichment(
     .single();
 
   if (insertError || !enrichmentRow) {
-    console.error('[Enrichment] Insert error:', insertError);
-    throw new Error('Failed to create enrichment record.');
+    console.error('[Enrichment] Insert error:', insertError?.message, insertError?.code, insertError?.details);
+    throw new Error(`Failed to create enrichment record: ${insertError?.message || 'unknown error'}`);
   }
 
   const enrichmentId = enrichmentRow.id as string;
