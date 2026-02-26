@@ -317,7 +317,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await handleContactsEventSelection(chatId, telegramUserId, data.substring(3), cq.id);
       }
       // --- Contacts date filter + pagination ---
-      else if (data.startsWith('cf:')) {
+      else if (data.startsWith('cd:')) {
         await handleContactsFilterSelection(chatId, telegramUserId, data.substring(3), cq.id);
       }
       // --- Contact detail view ---

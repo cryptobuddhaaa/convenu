@@ -336,11 +336,11 @@ const DATE_FILTER_LABELS: Record<DateFilterKey, string> = {
 
 async function showDateFilterMenu(chatId: number) {
   const keyboard: Array<Array<{ text: string; callback_data: string }>> = [
-    [{ text: '📅 Today', callback_data: 'cf:today' }],
-    [{ text: '📅 Last 3 Days', callback_data: 'cf:3d' }],
-    [{ text: '📅 Last Week', callback_data: 'cf:week' }],
-    [{ text: '📅 Last Month', callback_data: 'cf:month' }],
-    [{ text: '📋 All Time', callback_data: 'cf:all' }],
+    [{ text: '📅 Today', callback_data: 'cd:today' }],
+    [{ text: '📅 Last 3 Days', callback_data: 'cd:3d' }],
+    [{ text: '📅 Last Week', callback_data: 'cd:week' }],
+    [{ text: '📅 Last Month', callback_data: 'cd:month' }],
+    [{ text: '📋 All Time', callback_data: 'cd:all' }],
   ];
 
   await sendMessage(chatId, '👥 <b>All Contacts</b>\n\nFilter by when they were added:', {
@@ -644,7 +644,7 @@ async function showContactsList(
   }
 
   if (hasMore && filterKey) {
-    keyboard.push([{ text: 'More ›', callback_data: `cf:${filterKey}:${offset + PAGE_SIZE}` }]);
+    keyboard.push([{ text: 'More ›', callback_data: `cd:${filterKey}:${offset + PAGE_SIZE}` }]);
   }
   keyboard.push([{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }]);
 
