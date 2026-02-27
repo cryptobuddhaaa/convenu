@@ -81,13 +81,19 @@ npx tsc -b --noEmit  # Type-check only
 
 6. **vite.config.ts dev server** — The `vercelApiPlugin` simulates Vercel's runtime locally. It supports `req.query`, `res.json()`, `res.redirect()`, `res.send()`, and `res.setHeader()`. If a handler uses a Vercel API not in the wrapper, it will fail only in dev (not production).
 
-7. **Contact enrichment architecture** — Enrichment logic lives in `api/_lib/enrichment.ts` (shared by both the web API and Telegram bot). The web API routes through `api/profile/index.ts?action=enrich` to avoid consuming a Vercel function slot. The Telegram bot flow is in `api/telegram/_flows/enrichment.ts`. Both call the same `performEnrichment()` pipeline. Enrichment data is stored as JSONB in `contact_enrichments` table. Usage is tracked in `enrichment_usage` (per-user, per-month). The client-side store is `src/hooks/useEnrichment.ts` (Zustand).
+7. **Contact enrichment architecture** — Enrichment logic lives in `api/_lib/enrichment.ts` (shared by both the web API and Telegram bot). The web API routes through `api/profile/index.ts?action=enrich` to avoid consuming a Vercel function slot. The Telegram bot flow is in `api/telegram/_flows/enrichment.ts`. Both call the same `performEnrichment()` pipeline. Enrichment data is stored as JSONB in `contact_enrichments` table. Usage is tracked in `enrichment_usage` (per-user, per-month). The client-side store is `src/hooks/useEnrichment.ts` (Zustand). After saving a new contact via `/newcontact`, the bot stores the contact's ID in bot state (`_lastContactId`). If the user immediately taps `/enrich`, it auto-enriches that contact without showing the picker. The stored ID is cleared after use so subsequent `/enrich` calls show the normal picker.
 
 8. **Telegram contact picker state** — The `/newcontact` flow has a `pick_contact_method` state between itinerary/event selection and field input. `handleUsersShared()` processes the `users_shared` update; `handleContactTextInput()` catches text in this state (the "Enter manually" button) and transitions to the normal field flow. The webhook routes `msg.users_shared` before forwarded-message checks.
 
 9. **Clipboard in Telegram WebView** — `navigator.clipboard.writeText()` silently fails in Telegram's WebView. Always use the `copyToClipboard()` helper (try Clipboard API, then fallback to `textarea + document.execCommand('copy')`). Pattern is in `FollowUpDialog.tsx` and `WalletButton.tsx`. Return early if copy fails — do not open a DM link with stale clipboard content.
 
 10. **Follow-Up dialog was renamed** — `InviteDialog.tsx` was renamed to `FollowUpDialog.tsx`. The button in `ContactsPage.tsx` says "Follow-Up" (not "Invite"). Internal state variables use `showFollowUp` / `setShowFollowUp`.
+
+11. **Telegram callback prefix collisions** — Callback prefixes must be globally unique across all flows. Notably, `cf:` is used by contact confirmation (`cf:yes`/`cf:no` in `/newcontact`). The contacts date-filter uses `cd:` to avoid collision. Before adding a new callback prefix, grep for `data.startsWith('` in `webhook.ts` to check for conflicts. Current prefixes: `it:`, `ev:`, `cf:` (contact confirm), `ed:`, `yc:`, `ye:`, `xi:`, `xl:`, `xd:`, `xt:`, `xc:`, `xe:`, `iv:`, `tg:`, `fw:`, `fn:`, `hs:`, `cl:`, `ce:`, `cd:` (contacts date-filter), `cv:`, `cx:`, `en:`.
+
+12. **Contacts date filter + pagination** — The `/contacts` → "All Contacts" flow shows a date filter menu (Today, Last 3 Days, Last Week, Last Month, All Time) before listing contacts. Results are paginated at 10 per page with a "More ›" button. Callbacks use `cd:` prefix (`cd:today`, `cd:3d:10` for pagination). The `showContactsList()` function accepts optional `dateFilter`, `offset`, and `filterKey` params. Itinerary/event-scoped views bypass the date filter and show contacts directly.
+
+13. **Telegram handle storage and lookup** — Handles are stored WITH the `@` prefix (e.g., `@johndoe`). When querying by handle, always use `.or(\`telegram_handle.ilike.@${handle},telegram_handle.ilike.${handle}\`)` to match both formats. The correct pattern is in `forward.ts`; `enrichment.ts` and `handshake.ts` also use this pattern.
 
 ## Testing Checklist
 
@@ -102,6 +108,8 @@ Before deploying, verify:
 - [ ] Contact enrichment: usage counter updates, limit enforced at 10/month
 - [ ] Telegram `/enrich` command returns formatted profile with regenerate button
 - [ ] Telegram `/enrich @handle` finds contact by telegram handle and enriches
+- [ ] Telegram `/newcontact` → save → message suggests `/enrich` → tapping auto-enriches last contact
+- [ ] Telegram `/contacts` → "All Contacts" → date filter menu → paginated results (10 per page, "More ›")
 - [ ] Telegram `/newcontact` → "Pick from Telegram" auto-fills handle + name, skips to company field
 - [ ] Telegram `/newcontact` → "Enter manually" starts normal field-by-field flow
 - [ ] Follow-Up: date filter presets (Today, This week, etc.) and custom range filter contacts correctly
