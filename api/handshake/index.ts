@@ -13,8 +13,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-const SOLANA_RPC = process.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
-const TREASURY_WALLET = process.env.VITE_TREASURY_WALLET || '';
+const SOLANA_RPC = process.env.SOLANA_RPC_URL || process.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+const TREASURY_WALLET = process.env.TREASURY_WALLET || process.env.VITE_TREASURY_WALLET || '';
 const MINT_FEE_LAMPORTS = 10_000_000; // 0.01 SOL
 const POINTS_PER_HANDSHAKE = 10;
 

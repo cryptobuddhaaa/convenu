@@ -23,13 +23,14 @@ export default function ContactsPage() {
   const { contacts, tags, addTag, deleteTag, initialize } = useContacts();
   const { initialize: initializeHandshakes } = useHandshakes();
   const { usage, batchEnrich, batchEnriching } = useEnrichment();
-  const { isPremium } = useSubscription();
+  const { isPremium, initialize: initSub } = useSubscription();
 
   // Auto-refresh contacts and handshakes when tab is opened (component mounts)
   useEffect(() => {
     if (user) {
       initialize(user.id);
       initializeHandshakes(user.id);
+      initSub();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [searchQuery, setSearchQuery] = useState('');
