@@ -40,7 +40,7 @@ const EMPTY_PROFILE: ProfileData = {
 
 export default function ProfilePage() {
   const { user } = useAuth();
-  const { subscription, isPremium, initialize: initSub, stripePortal } = useSubscription();
+  const { subscription, isPremium, limits, initialize: initSub, stripePortal } = useSubscription();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const { getPrimaryWallet } = useUserWallet();
   const [profile, setProfile] = useState<ProfileData>(EMPTY_PROFILE);
@@ -397,9 +397,13 @@ export default function ProfilePage() {
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">Subscription</h3>
-          {isPremium && (
+          {isPremium ? (
             <span className="px-2.5 py-0.5 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded-full border border-blue-500/30">
               PREMIUM
+            </span>
+          ) : (
+            <span className="px-2.5 py-0.5 bg-slate-700/50 text-slate-400 text-xs font-semibold rounded-full border border-slate-600/30">
+              FREE
             </span>
           )}
         </div>
@@ -443,23 +447,33 @@ export default function ProfilePage() {
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm text-slate-400">
-              Upgrade to Premium for 100 AI enrichments/month, unlimited contacts, enhanced AI, and more.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowUpgrade(true)}
-                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                Upgrade — $5/mo
-              </button>
-              <button
-                onClick={() => setShowUpgrade(true)}
-                className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                $45/year <span className="text-green-400 text-xs">Save $15</span>
-              </button>
+            <div className="flex items-center justify-between py-2 text-sm">
+              <span className="text-slate-400">Plan</span>
+              <span className="text-white font-medium">Free</span>
             </div>
+
+            <div className="space-y-1.5 text-sm">
+              {[
+                ['Itineraries', `${limits.itineraries}`],
+                ['Events per trip', `${limits.eventsPerItinerary}`],
+                ['Contacts', `${limits.contacts}`],
+                ['AI enrichments/mo', `${limits.enrichments}`],
+                ['Tags', `${limits.tags}`],
+                ['Templates', `${limits.templates}`],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between py-1">
+                  <span className="text-slate-400">{label}</span>
+                  <span className="text-slate-200">{value}</span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowUpgrade(true)}
+              className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors mt-2"
+            >
+              Upgrade to Premium — $5/mo
+            </button>
           </div>
         )}
       </div>
