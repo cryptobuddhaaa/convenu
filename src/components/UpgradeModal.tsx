@@ -111,7 +111,7 @@ export function UpgradeModal({ open, onClose, triggerReason }: UpgradeModalProps
                 !isMonthly ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Annual <span className="text-green-400 text-xs ml-1">Save $15</span>
+              Annual <span className="text-green-400 text-xs ml-1">3 Months FREE</span>
             </button>
           </div>
         </div>
