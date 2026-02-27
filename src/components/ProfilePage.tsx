@@ -476,32 +476,41 @@ export default function ProfilePage() {
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex items-center justify-between py-2 text-sm">
-              <span className="text-slate-400">Plan</span>
-              <span className="text-white font-medium">Free</span>
-            </div>
-
-            <div className="space-y-1.5 text-sm">
-              {[
-                ['Itineraries', `${limits.itineraries}`],
-                ['Events per trip', `${limits.eventsPerItinerary}`],
-                ['Contacts', `${limits.contacts}`],
-                ['AI enrichments/mo', `${limits.enrichments}`],
-                ['Tags', `${limits.tags}`],
-                ['Templates', `${limits.templates}`],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between py-1">
-                  <span className="text-slate-400">{label}</span>
-                  <span className="text-slate-200">{value}</span>
-                </div>
-              ))}
-            </div>
+            {/* Side-by-side comparison table */}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700">
+                  <th className="text-left text-slate-400 font-normal py-2"></th>
+                  <th className="text-right text-slate-400 font-semibold py-2">Free</th>
+                  <th className="text-right text-blue-400 font-semibold py-2">Premium</th>
+                </tr>
+              </thead>
+              <tbody>
+                {([
+                  ['Itineraries', '10', 'Unlimited'],
+                  ['Events/trip', '20', 'Unlimited'],
+                  ['Contacts', '100', 'Unlimited'],
+                  ['Enrichments/mo', '10', '100'],
+                  ['Tags', '10', '25'],
+                  ['Templates', '3', '10'],
+                  ['Batch enrich', '—', 'Yes'],
+                  ['Enhanced AI', '—', 'Yes'],
+                  ['vCard export', '—', 'Yes'],
+                ] as const).map(([label, free, premium]) => (
+                  <tr key={label} className="border-b border-slate-700/50">
+                    <td className="text-slate-400 py-1.5">{label}</td>
+                    <td className="text-right text-slate-300 py-1.5">{free}</td>
+                    <td className="text-right text-blue-300 py-1.5">{premium}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
             <button
               onClick={() => setShowUpgrade(true)}
-              className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors mt-2"
+              className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
             >
-              Upgrade to Premium — $5/mo
+              Upgrade to Premium — $5/mo or $45/yr (3 months FREE)
             </button>
           </div>
         )}
