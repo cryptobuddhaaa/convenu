@@ -5,6 +5,9 @@
  */
 
 import { useState } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { useConnection } from '@solana/wallet-adapter-react';
+import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { useSubscription } from '../hooks/useSubscription';
 import type { BillingPeriod } from '../models/types';
 import { toast } from './Toast';
@@ -18,7 +21,9 @@ interface UpgradeModalProps {
 export function UpgradeModal({ open, onClose, triggerReason }: UpgradeModalProps) {
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [loading, setLoading] = useState<string | null>(null);
-  const { stripeCheckout } = useSubscription();
+  const { stripeCheckout, solanaCheckout, solanaConfirm } = useSubscription();
+  const { publicKey, sendTransaction, connected } = useWallet();
+  const { connection } = useConnection();
 
   if (!open) return null;
 
@@ -32,6 +37,34 @@ export function UpgradeModal({ open, onClose, triggerReason }: UpgradeModalProps
       await stripeCheckout(period);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to start checkout');
+      setLoading(null);
+    }
+  };
+
+  const handleSolana = async () => {
+    if (!publicKey) {
+      toast.error('Connect your Solana wallet first (see Wallet section above)');
+      return;
+    }
+    setLoading('solana');
+    try {
+      const pricing = await solanaCheckout(period);
+      const lamports = Math.ceil(pricing.sol * LAMPORTS_PER_SOL);
+      const tx = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: new PublicKey(pricing.treasuryWallet),
+          lamports,
+        })
+      );
+      const signature = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(signature, 'confirmed');
+      await solanaConfirm(signature, period);
+      toast.success('Payment confirmed! Welcome to Premium.');
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Solana payment failed');
+    } finally {
       setLoading(null);
     }
   };
@@ -143,9 +176,25 @@ export function UpgradeModal({ open, onClose, triggerReason }: UpgradeModalProps
             Pay with Telegram Stars — {stars}
           </button>
 
-          <p className="text-center text-xs text-slate-500">
-            SOL payments available via the Solana Pay option on your profile page
-          </p>
+          <button
+            onClick={handleSolana}
+            disabled={!!loading}
+            className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-medium rounded-lg flex items-center justify-center gap-2 transition-colors"
+          >
+            {loading === 'solana' ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.28 6.82a.67.67 0 00-.47-.2H4.39a.34.34 0 00-.24.57l2.44 2.44a.67.67 0 00.47.2h12.42a.34.34 0 00.24-.57L17.28 6.82z" />
+                <path d="M6.72 14.18a.67.67 0 01.47-.2h12.42a.34.34 0 01.24.57l-2.44 2.44a.67.67 0 01-.47.2H4.52a.34.34 0 01-.24-.57l2.44-2.44z" />
+                <path d="M17.28 10.32a.67.67 0 00-.47-.2H4.39a.34.34 0 01-.24-.57l2.44-2.44" opacity="0" />
+              </svg>
+            )}
+            Pay with SOL{connected ? '' : ' (connect wallet first)'}
+          </button>
         </div>
       </div>
     </div>
