@@ -276,7 +276,12 @@ async function handleStripeCheckout(userId: string, req: VercelRequest, res: Ver
     if (!resp.ok) {
       const errText = await resp.text();
       console.error('[Stripe] Checkout error:', resp.status, errText);
-      return res.status(500).json({ error: 'Failed to create checkout session' });
+      let detail = 'Failed to create checkout session';
+      try {
+        const errJson = JSON.parse(errText);
+        if (errJson?.error?.message) detail = errJson.error.message;
+      } catch { /* use default */ }
+      return res.status(500).json({ error: detail });
     }
 
     const session = await resp.json() as { url: string; id: string };
