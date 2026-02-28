@@ -10,10 +10,16 @@ interface Toast {
 }
 
 let addToastFn: ((message: string, type: ToastType) => void) | null = null;
+let pendingToasts: Array<{ message: string; type: ToastType }> = [];
 let toastCounter = 0;
 
 export function toast(message: string, type: ToastType = 'info') {
-  addToastFn?.(message, type);
+  if (addToastFn) {
+    addToastFn(message, type);
+  } else {
+    // Queue toasts fired before Toaster mounts (e.g. X OAuth redirect)
+    pendingToasts.push({ message, type });
+  }
 }
 
 toast.success = (message: string) => toast(message, 'success');
@@ -51,6 +57,11 @@ export function Toaster() {
 
   useEffect(() => {
     addToastFn = addToast;
+    // Flush any toasts queued before Toaster mounted
+    if (pendingToasts.length > 0) {
+      pendingToasts.forEach(({ message, type }) => addToast(message, type));
+      pendingToasts = [];
+    }
     return () => { addToastFn = null; };
   }, [addToast]);
 
